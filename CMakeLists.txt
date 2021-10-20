@@ -9,7 +9,6 @@ add_executable(
         screen-recorder src/main.cpp
 )
 
-
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
         libavcodec
