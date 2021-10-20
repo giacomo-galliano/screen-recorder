@@ -1,8 +1,8 @@
 # CLion work directory
-.idea/
+.idea*/
 # CLion build directories
 cmake-build-*/
 
-.vscode/
+.vscode*/
 
-build/
+build*/
