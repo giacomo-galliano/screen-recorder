@@ -1,0 +1,7 @@
+[
+{
+  "directory": "/home/giacomo/Documents/Poli/I.II_Programmazione di sistema/screen-recorder/build",
+  "command": "/bin/x86_64-linux-gnu-g++-10  -I\"/home/giacomo/Documents/Poli/I.II_Programmazione di sistema/screen-recorder/include\" -g -std=gnu++17 -o CMakeFiles/screen-recorder.dir/src/main.cpp.o -c \"/home/giacomo/Documents/Poli/I.II_Programmazione di sistema/screen-recorder/src/main.cpp\"",
+  "file": "/home/giacomo/Documents/Poli/I.II_Programmazione di sistema/screen-recorder/src/main.cpp"
+}
+]

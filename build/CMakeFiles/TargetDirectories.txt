@@ -1,0 +1,3 @@
+/home/giacomo/Documents/Poli/I.II_Programmazione di sistema/screen-recorder/build/CMakeFiles/rebuild_cache.dir
+/home/giacomo/Documents/Poli/I.II_Programmazione di sistema/screen-recorder/build/CMakeFiles/edit_cache.dir
+/home/giacomo/Documents/Poli/I.II_Programmazione di sistema/screen-recorder/build/CMakeFiles/screen-recorder.dir
