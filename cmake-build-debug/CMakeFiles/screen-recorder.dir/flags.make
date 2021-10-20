@@ -4,7 +4,7 @@
 # compile CXX with /usr/bin/c++
 CXX_DEFINES = 
 
-CXX_INCLUDES = -I"/home/giacomo/Documents/Poli/I.II_Programmazione di sistema/screen-recorder/include"
+CXX_INCLUDES = -I/home/darko/CLionProjects/screen-recorder/include
 
 CXX_FLAGS = -g -std=gnu++17
 

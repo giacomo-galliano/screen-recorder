@@ -7,6 +7,7 @@ extern "C"
 }
 
 #include <stdio.h>
+#include <iostream>
 
 
 int main(int argc, char **argv)
@@ -19,8 +20,8 @@ int main(int argc, char **argv)
     pFormatCtx = avformat_alloc_context(); //allocate the memory to the AVFormatContext component
     if (!pFormatCtx)
     {
-        printf("Couldn't create AVFormatContext\n");
-        return -1;
+        std::cout<<"Couldn't create AVFormatContext"<<std::endl;
+        exit(-1);
     }
 
     /*
@@ -37,16 +38,16 @@ int main(int argc, char **argv)
    */
     if (avformat_open_input(&pFormatCtx, ":0.0", ift, NULL) != 0)
     {
-        printf("Couldn't open the video file\n");
-        return -1;
+        std::cout<<"Couldn't open the video file"<<std::endl;
+        exit(-1);
     };
 
     // Now we retrieve the stream informations. It populates pFormatCtx->streams with the proper infos
     if (avformat_find_stream_info(pFormatCtx, NULL) < 0)
     {
         //the function only looks at the header, so we must check out the stream informations
-        printf("Couldn't find stream informations\n");
-        return -1;
+        std::cout<<"Couldn't find stream informations"<<std::endl;
+        exit(-1);
     }
 
     // Now pFormatCtx->streams is just an array of pointers, of size pFormatCtx->nb_streams
@@ -61,8 +62,8 @@ int main(int argc, char **argv)
         }
     if (videoIndex == -1)
     {
-        printf("Didn't find a video stream.\n");
-        return -1;
+        std::cout<<"Didn't find a video stream."<<std::endl;
+        exit(-1);
     }
 
     AVCodecContext *pCodecCtx = NULL; //it will contain the stream's information about the codec
@@ -70,9 +71,9 @@ int main(int argc, char **argv)
 
     pCodecCtx = avcodec_alloc_context3(pCodec);
     if(!pCodecCtx){
-        printf("Out of memory error\n");
+        std::cout<<"Out of memory error"<<std::endl;
         avformat_close_input(&pFormatCtx);
-        return -1;
+        exit(-1);
     }
 
     // Get a pointer to the codec context for the video stream
@@ -88,8 +89,8 @@ int main(int argc, char **argv)
     pCodec = avcodec_find_decoder(pCodecCtx->codec_id);
     if (pCodec == NULL)
     {
-        printf("Codec not supported.\n");
-        return -1;
+        std::cout<<"Codec not supported."<<std::endl;
+        exit(-1);
     }
 
     /* We must not use the AVCodecContext from the video stream directly
@@ -108,9 +109,9 @@ int main(int argc, char **argv)
     // open codec. options -> NULL
     if (avcodec_open2(pCodecCtx, pCodec, NULL) < 0)
     {
-        printf("Could not open the codec.\n");
+        std::cout<<"Could not open the codec."<<std::endl;
         pCodecCtx = nullptr;
-        return -1;
+        exit(-1);
     }
 
     /* STORING THE DATA */
@@ -118,16 +119,16 @@ int main(int argc, char **argv)
     pFrame = av_frame_alloc(); // allocate video frame
     if (!pFrame)
     {
-        printf("Couldn't allocate AVFrame\n");
-        return -1;
+        std::cout<<"Couldn't allocate AVFrame"<<std::endl;
+        exit(-1);
     }
 
     AVPacket *pPacket = NULL;
     pPacket = av_packet_alloc();
     if (!pPacket)
     {
-        printf("Couldn't allocate AVPacket\n");
-        return -1;
+        std::cout<<"Couldn't allocate AVPacket"<<std::endl;
+        exit(-1);
     }
 
 

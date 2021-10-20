@@ -8,7 +8,7 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
-  "/home/giacomo/Documents/Poli/I.II_Programmazione di sistema/screen-recorder/src/main.cpp" "/home/giacomo/Documents/Poli/I.II_Programmazione di sistema/screen-recorder/cmake-build-debug/CMakeFiles/screen-recorder.dir/src/main.cpp.o"
+  "/home/darko/CLionProjects/screen-recorder/src/main.cpp" "/home/darko/CLionProjects/screen-recorder/cmake-build-debug/CMakeFiles/screen-recorder.dir/src/main.cpp.o"
   )
 set(CMAKE_CXX_COMPILER_ID "GNU")
 

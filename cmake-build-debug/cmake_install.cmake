@@ -1,4 +1,4 @@
-# Install script for directory: /home/giacomo/Documents/Poli/I.II_Programmazione di sistema/screen-recorder
+# Install script for directory: /home/darko/CLionProjects/screen-recorder
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -50,5 +50,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/giacomo/Documents/Poli/I.II_Programmazione di sistema/screen-recorder/cmake-build-debug/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/darko/CLionProjects/screen-recorder/cmake-build-debug/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

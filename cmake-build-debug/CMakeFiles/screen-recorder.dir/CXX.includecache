@@ -6,7 +6,7 @@
 
 #IncludeRegexTransform: 
 
-/home/giacomo/Documents/Poli/I.II_Programmazione di sistema/screen-recorder/src/main.cpp
+/home/darko/CLionProjects/screen-recorder/src/main.cpp
 libavcodec/avcodec.h
 -
 libavformat/avformat.h
@@ -16,5 +16,7 @@ libswscale/swscale.h
 libavdevice/avdevice.h
 -
 stdio.h
+-
+iostream
 -
 
