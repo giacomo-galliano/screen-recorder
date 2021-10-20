@@ -1,3 +1,3 @@
-/home/giacomo/Documents/Poli/I.II_Programmazione di sistema/screen-recorder/cmake-build-debug/CMakeFiles/rebuild_cache.dir
-/home/giacomo/Documents/Poli/I.II_Programmazione di sistema/screen-recorder/cmake-build-debug/CMakeFiles/edit_cache.dir
-/home/giacomo/Documents/Poli/I.II_Programmazione di sistema/screen-recorder/cmake-build-debug/CMakeFiles/screen-recorder.dir
+/home/darko/CLionProjects/screen-recorder/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/home/darko/CLionProjects/screen-recorder/cmake-build-debug/CMakeFiles/edit_cache.dir
+/home/darko/CLionProjects/screen-recorder/cmake-build-debug/CMakeFiles/screen-recorder.dir
