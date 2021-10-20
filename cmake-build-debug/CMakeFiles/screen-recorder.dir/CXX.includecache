@@ -15,4 +15,6 @@ libswscale/swscale.h
 -
 libavdevice/avdevice.h
 -
+stdio.h
+-
 

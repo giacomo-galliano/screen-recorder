@@ -6,9 +6,14 @@ extern "C"
 #include <libavdevice/avdevice.h>
 }
 
+#include <stdio.h>
+
+
 int main(int argc, char **argv)
 {
-
+    avformat_network_init();
+    avdevice_register_all();
+    
     AVFormatContext *pFormatCtx; //it contains the informations about the format
 
     pFormatCtx = avformat_alloc_context(); //allocate the memory to the AVFormatContext component
@@ -22,6 +27,7 @@ int main(int argc, char **argv)
     *   Linux - we'll use "x11grub"
     */
     AVInputFormat *ift = av_find_input_format("x11grab");
+
     /*
    * avformat_open_input(AVFormatContext, filename, AVInputFormat, AVDictionary)
    * this function is used to open the file and read its header
@@ -60,16 +66,25 @@ int main(int argc, char **argv)
     }
 
     AVCodecContext *pCodecCtx = NULL; //it will contain the stream's information about the codec
+    AVCodec *pCodec = NULL;
+
+    pCodecCtx = avcodec_alloc_context3(pCodec);
+    if(!pCodecCtx){
+        printf("Out of memory error\n");
+        avformat_close_input(&pFormatCtx);
+        return -1;
+    }
+
     // Get a pointer to the codec context for the video stream
     int result = avcodec_parameters_to_context(pCodecCtx, pFormatCtx->streams[videoIndex]->codecpar);
-    if (result < 0)    {
+    if (result < 0)
+    {
         //failed to set parameters
         avformat_close_input(&pFormatCtx);
         avcodec_free_context(&pCodecCtx);
     }
 
     //Now we need to find the actual codec and open it
-    AVCodec *pCodec = NULL;
     pCodec = avcodec_find_decoder(pCodecCtx->codec_id);
     if (pCodec == NULL)
     {
@@ -94,10 +109,26 @@ int main(int argc, char **argv)
     if (avcodec_open2(pCodecCtx, pCodec, NULL) < 0)
     {
         printf("Could not open the codec.\n");
+        pCodecCtx = nullptr;
         return -1;
     }
 
     /* STORING THE DATA */
     AVFrame *pFrame = NULL;    // the place to actually store the frame
     pFrame = av_frame_alloc(); // allocate video frame
+    if (!pFrame)
+    {
+        printf("Couldn't allocate AVFrame\n");
+        return -1;
+    }
+
+    AVPacket *pPacket = NULL;
+    pPacket = av_packet_alloc();
+    if (!pPacket)
+    {
+        printf("Couldn't allocate AVPacket\n");
+        return -1;
+    }
+
+
 }
