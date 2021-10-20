@@ -2,3 +2,7 @@
 .idea/
 # CLion build directories
 cmake-build-*/
+
+.vscode
+
+build
