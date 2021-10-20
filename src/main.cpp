@@ -68,6 +68,9 @@ int main(int argc, char **argv)
     AVCodecContext *pCodecCtx = NULL; //it will contain the stream's information about the codec
     AVCodec *pCodec = NULL;
 
+    /* Allocate an AVCodecContext and set its fields to default values.
+     * The resulting struct should be freed with avcodec_free_context().
+     */
     pCodecCtx = avcodec_alloc_context3(pCodec);
     if(!pCodecCtx){
         printf("Out of memory error\n");
@@ -102,10 +105,10 @@ int main(int argc, char **argv)
     */
     /*
     pCodecCtx = avcodec_alloc_context3(pCodec);
-    if(avcodec_copy_context())
+
     */
 
-    // open codec. options -> NULL
+    /* open codec. options -> NULL */
     if (avcodec_open2(pCodecCtx, pCodec, NULL) < 0)
     {
         printf("Could not open the codec.\n");
