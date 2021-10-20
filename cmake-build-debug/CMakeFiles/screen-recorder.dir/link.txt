@@ -1,1 +1,0 @@
-/usr/bin/c++ -g CMakeFiles/screen-recorder.dir/src/main.cpp.o -o screen-recorder  /usr/lib/x86_64-linux-gnu/libavcodec.so /usr/lib/x86_64-linux-gnu/libavdevice.so /usr/lib/x86_64-linux-gnu/libavfilter.so /usr/lib/x86_64-linux-gnu/libavformat.so /usr/lib/x86_64-linux-gnu/libavutil.so /usr/lib/x86_64-linux-gnu/libswscale.so 
