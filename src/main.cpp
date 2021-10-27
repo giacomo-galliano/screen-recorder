@@ -160,25 +160,42 @@ int main(int argc, char **argv) {
         if (packet.stream_index == videoIndex) {
             // Decode video frame
             //avcodec_send_packet(pCodecCtx, &packet);
-            //frameFinished = avcodec_receive_frame(pCodecCtx, pFrame);
-            avcodec_decode_video2(pCodecCtx, pFrame, &frameFinished, &packet);
+            int res = avcodec_send_packet(pCodecCtx, &packet);
 
-            // Did we get a video frame?
-            if (frameFinished) {
-                // Convert the image from its native format to RGB
-                sws_scale(sws_ctx, (uint8_t const *const *) pFrame->data,
-                          pFrame->linesize, 0, pCodecCtx->height,
-                          pFrameConv->data, pFrameConv->linesize);
-
-                // Save the frame to disk
-                if(++i<=5)
-                    SaveFrame(pFrameConv, pCodecCtx->width,
-                              pCodecCtx->height, i);
-
-
+            if (res < 0) {
+                fprintf(stderr, "Error while sending a packet to the decoder: %d", res);
+                return res;
             }
+
+            while (res >= 0) {
+                // Return decoded output data (into a frame) from a decoder
+                res = avcodec_receive_frame(pCodecCtx, pFrame);
+                if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) {
+                    break;
+                } else if (res < 0) {
+                    fprintf(stderr, "Error while receiving a frame from the decoder: %d", res);
+                    return res;
+                }
+                //frameFinished = avcodec_receive_frame(pCodecCtx, pFrame);
+                //avcodec_decode_video2(pCodecCtx, pFrame, &frameFinished, &packet);
+
+                // Did we get a video frame?
+                if (frameFinished) {
+                    // Convert the image from its native format to RGB
+                    sws_scale(sws_ctx, (uint8_t const *const *) pFrame->data,
+                              pFrame->linesize, 0, pCodecCtx->height,
+                              pFrameConv->data, pFrameConv->linesize);
+
+                    // Save the frame to disk
+                    if (++i <= 5)
+                        SaveFrame(pFrameConv, pCodecCtx->width,
+                                  pCodecCtx->height, i);
+
+
+                }
+            }
+            av_free_packet(&packet);
         }
-        av_free_packet(&packet);
     }
 }
 void SaveFrame(AVFrame *pFrame, int width, int height, int iFrame) {
