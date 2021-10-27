@@ -34,15 +34,15 @@ int main(int argc, char **argv) {
    * this function is used to open the file and read its header
    * 
    * The last three arguments are used to specify the file format, 
-   * buffer size, and format options, but by setting this to NULL or 0, libavformat will auto-detect these. 
+   * buffer size, and format options, but by setting this to nullptr or 0, libavformat will auto-detect these. 
    */
-    if (avformat_open_input(&pFormatCtx, ":0.0", ift, NULL) != 0) {
+    if (avformat_open_input(&pFormatCtx, ":0.0", ift, nullptr) != 0) {
         std::cout << "Couldn't open the video file" << std::endl;
         exit(-1);
     };
 
     // Now we retrieve the stream informations. It populates pFormatCtx->streams with the proper infos
-    if (avformat_find_stream_info(pFormatCtx, NULL) < 0) {
+    if (avformat_find_stream_info(pFormatCtx, nullptr) < 0) {
         //the function only looks at the header, so we must check out the stream informations
         std::cout << "Couldn't find stream informations" << std::endl;
         exit(-1);
@@ -62,8 +62,8 @@ int main(int argc, char **argv) {
         exit(-1);
     }
 
-    AVCodecContext *pCodecCtx = NULL; //it will contain the stream's information about the codec
-    AVCodec *pCodec = NULL;
+    AVCodecContext *pCodecCtx = nullptr; //it will contain the stream's information about the codec
+    AVCodec *pCodec = nullptr;
 
     pCodecCtx = avcodec_alloc_context3(pCodec);
     if (!pCodecCtx) {
@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
 
     //Now we need to find the actual codec and open it
     pCodec = avcodec_find_decoder(pCodecCtx->codec_id);
-    if (pCodec == NULL) {
+    if (pCodec == nullptr) {
         std::cout << "Codec not supported." << std::endl;
         exit(-1);
     }
@@ -91,8 +91,8 @@ int main(int argc, char **argv) {
     * So we copy the context to a new location, after allocating memory for it.
     *
     * avcodec_alloc_context3()
-    * if the codec param is non-NULL, allocate private data and initialize defaults for the given codec. 
-    * It is illegal to then call avcodec_open2() with a different codec. If NULL, then the codec-specific 
+    * if the codec param is non-nullptr, allocate private data and initialize defaults for the given codec. 
+    * It is illegal to then call avcodec_open2() with a different codec. If nullptr, then the codec-specific 
     * defaults won't be initialized, which may result in suboptimal default settings
     */
     /*
@@ -100,15 +100,15 @@ int main(int argc, char **argv) {
     if(avcodec_copy_context())
     */
 
-    // open codec. options -> NULL
-    if (avcodec_open2(pCodecCtx, pCodec, NULL) < 0) {
+    // open codec. options -> nullptr
+    if (avcodec_open2(pCodecCtx, pCodec, nullptr) < 0) {
         std::cout << "Could not open the codec." << std::endl;
         pCodecCtx = nullptr;
         exit(-1);
     }
 
     /* STORING THE DATA */
-    AVFrame *pFrame = NULL;    // the place to actually store the frame
+    AVFrame *pFrame = nullptr;    // the place to actually store the frame
     pFrame = av_frame_alloc(); // allocate video frame
     if (!pFrame) {
         std::cout << "Couldn't allocate AVFrame" << std::endl;
@@ -117,14 +117,14 @@ int main(int argc, char **argv) {
     /*
      * This AVFrame represents the converted frame for the output
      */
-    AVFrame *pFrameConv = NULL;
+    AVFrame *pFrameConv = nullptr;
     pFrameConv = av_frame_alloc(); // allocate video frame
     if (!pFrameConv) {
         std::cout << "Couldn't allocate AVFrame" << std::endl;
         exit(-1);
     }
 
-    uint8_t *buffer = NULL;
+    uint8_t *buffer = nullptr;
     int nbytes;
     // Determine required buffer size and allocate buffer
     nbytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24, pCodecCtx->width,
@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
 
 
     //READING THE DATA
-    struct SwsContext *sws_ctx = NULL;
+    struct SwsContext *sws_ctx = nullptr;
     int frameFinished;
     AVPacket packet;
 // initialize SWS context for software scaling
@@ -149,9 +149,9 @@ int main(int argc, char **argv) {
                              pCodecCtx->height,
                              AV_PIX_FMT_RGB24,
                              SWS_BILINEAR,
-                             NULL,
-                             NULL,
-                             NULL
+                             nullptr,
+                             nullptr,
+                             nullptr
     );
 
     int i = 0;
@@ -189,7 +189,7 @@ void SaveFrame(AVFrame *pFrame, int width, int height, int iFrame) {
     // Open file
     sprintf(szFilename, "frame%d.ppm", iFrame);
     pFile=fopen(szFilename, "wb");
-    if(pFile==NULL)
+    if(pFile==nullptr)
         return;
 
     // Write header
