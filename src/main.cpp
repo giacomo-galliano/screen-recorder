@@ -4,6 +4,7 @@ extern "C"
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
 #include <libavdevice/avdevice.h>
+#include <libavutil/imgutils.h>
 }
 
 #include <stdio.h>
@@ -122,6 +123,25 @@ int main(int argc, char **argv)
         std::cout<<"Couldn't allocate AVFrame"<<std::endl;
         exit(-1);
     }
+    /*
+     * This AVFrame represents the converted frame for the output
+     */
+    AVFrame *pFrameConv  = NULL;
+    pFrameConv = av_frame_alloc(); // allocate video frame
+    if (!pFrameConv)
+    {
+        std::cout<<"Couldn't allocate AVFrame"<<std::endl;
+        exit(-1);
+    }
+
+    uint8_t *buffer = NULL;
+    int nbytes;
+    // Determine required buffer size and allocate buffer
+    nbytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24,pCodecCtx->width,
+                                          pCodecCtx->height,32);
+
+    buffer=(uint8_t *)av_malloc(nbytes*sizeof(uint8_t));
+
 
     AVPacket *pPacket = NULL;
     pPacket = av_packet_alloc();
@@ -130,6 +150,5 @@ int main(int argc, char **argv)
         std::cout<<"Couldn't allocate AVPacket"<<std::endl;
         exit(-1);
     }
-
 
 }
