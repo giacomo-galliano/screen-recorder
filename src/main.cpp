@@ -5,6 +5,8 @@ extern "C"
 #include <libswscale/swscale.h>
 #include <libavdevice/avdevice.h>
 #include <libavutil/imgutils.h>
+#include <SDL/SDL.h>
+#include <SDL/SDL_thread.h>
 }
 
 #include <stdio.h>
@@ -170,33 +172,59 @@ int main(int argc, char **argv) {
             while (res >= 0) {
                 // Return decoded output data (into a frame) from a decoder
                 res = avcodec_receive_frame(pCodecCtx, pFrame);
+
                 if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) {
                     break;
                 } else if (res < 0) {
                     fprintf(stderr, "Error while receiving a frame from the decoder: %d", res);
-                    return res;
+                    //return res;
+                    break;
                 }
                 //frameFinished = avcodec_receive_frame(pCodecCtx, pFrame);
                 //avcodec_decode_video2(pCodecCtx, pFrame, &frameFinished, &packet);
-
+                printf(
+                        "Frame %d (type=%c, size=%d bytes, format=%d) pts %d key_frame %d [DTS %d]\n",
+                        pCodecCtx->frame_number,
+                        av_get_picture_type_char(pFrame->pict_type),
+                        pFrame->pkt_size,
+                        pFrame->format,
+                        pFrame->pts,
+                        pFrame->key_frame,
+                        pFrame->coded_picture_number
+                );
                 // Did we get a video frame?
-                if (frameFinished) {
+                if (res==0) {
                     // Convert the image from its native format to RGB
                     sws_scale(sws_ctx, (uint8_t const *const *) pFrame->data,
                               pFrame->linesize, 0, pCodecCtx->height,
                               pFrameConv->data, pFrameConv->linesize);
 
                     // Save the frame to disk
-                    if (++i <= 5)
-                        SaveFrame(pFrameConv, pCodecCtx->width,
-                                  pCodecCtx->height, i);
-
-
+                    SaveFrame(pFrameConv, pCodecCtx->width,
+                              pCodecCtx->height, i+1);
                 }
             }
-            av_free_packet(&packet);
+            if (++i >= 24) {
+                break;
+            }
         }
     }
+    av_packet_unref(&packet);
+
+    // Free the RGB image
+    av_free(buffer);
+    av_free(pFrameConv);
+
+    // Free the YUV frame
+    av_free(pFrame);
+
+    // Close the codec
+    avcodec_close(pCodecCtx);
+
+    // Close the video file
+    avformat_close_input(&pFormatCtx);
+
+    return 0;
 }
 void SaveFrame(AVFrame *pFrame, int width, int height, int iFrame) {
     FILE *pFile;
