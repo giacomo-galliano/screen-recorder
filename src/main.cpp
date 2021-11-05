@@ -49,11 +49,16 @@ int fill_stream_info(AVStream *avs, AVCodec **avc, AVCodecContext **avcc) {
     return 0;
 }
 
-int open_media(const char *in_filename, AVFormatContext **avfc) {
+int open_media(const char *in_filename, AVFormatContext **avfc, AVInputFormat *ift) {
     *avfc = avformat_alloc_context();
     if (!*avfc) {printf("failed to alloc memory for format"); return -1;}
 
-    if (avformat_open_input(avfc, in_filename, NULL, NULL) != 0) {printf("failed to open input file %s", in_filename); return -1;}
+    //Media file input
+    //if (avformat_open_input(avfc, in_filename, NULL, NULL) != 0) {printf("failed to open input file %s", in_filename); return -1;}
+
+    //x11grab input
+
+    if (avformat_open_input(avfc, ":0.0", ift, NULL) != 0) {printf("failed to open input  %s", ift->name); return -1;}
 
     if (avformat_find_stream_info(*avfc, NULL) < 0) {printf("failed to get stream info"); return -1;}
     return 0;
@@ -321,7 +326,9 @@ int main(int argc, char *argv[])
     if (sp.output_extension)
         strcat(encoder->filename, sp.output_extension);
 
-    if (open_media(decoder->filename, &decoder->avfc)) return -1;
+    AVInputFormat *ift = av_find_input_format("x11grab");
+
+    if (open_media(decoder->filename, &decoder->avfc, ift)) return -1;
     if (prepare_decoder(decoder)) return -1;
 
     avformat_alloc_output_context2(&encoder->avfc, NULL, NULL, encoder->filename);
