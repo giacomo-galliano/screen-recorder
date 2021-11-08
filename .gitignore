@@ -3,6 +3,8 @@
 # CLion build directories
 cmake-build-*/
 
+media/
+
 .vscode/
 
 build/
