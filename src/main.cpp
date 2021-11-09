@@ -8,6 +8,9 @@ extern "C" {
 #include <libavutil/opt.h>
 #include <string.h>
 #include <inttypes.h>
+#include <libavdevice/avdevice.h>
+#include <libswscale/swscale.h>
+#include <libavutil/imgutils.h>
 }
 
 
@@ -49,7 +52,7 @@ int fill_stream_info(AVStream *avs, AVCodec **avc, AVCodecContext **avcc) {
     return 0;
 }
 
-int open_media(const char *in_filename, AVFormatContext **avfc, AVInputFormat *ift) {
+int open_media(const char *in_filename, AVFormatContext **avfc) {
     *avfc = avformat_alloc_context();
     if (!*avfc) {printf("failed to alloc memory for format"); return -1;}
 
@@ -57,7 +60,7 @@ int open_media(const char *in_filename, AVFormatContext **avfc, AVInputFormat *i
     //if (avformat_open_input(avfc, in_filename, NULL, NULL) != 0) {printf("failed to open input file %s", in_filename); return -1;}
 
     //x11grab input
-
+    AVInputFormat *ift = av_find_input_format("x11grab");
     if (avformat_open_input(avfc, ":0.0", ift, NULL) != 0) {printf("failed to open input  %s", ift->name); return -1;}
 
     if (avformat_find_stream_info(*avfc, NULL) < 0) {printf("failed to get stream info"); return -1;}
@@ -94,6 +97,8 @@ int prepare_video_encoder(StreamingContext *sc, AVCodecContext *decoder_ctx, AVR
     if (!sc->video_avcc) {printf("could not allocated memory for codec context"); return -1;}
 
     av_opt_set(sc->video_avcc->priv_data, "preset", "fast", 0);
+    //av_opt_set(sc->video_avcc->priv_data, "preset", "slow", 0);
+
     if (sp.codec_priv_key && sp.codec_priv_value)
         av_opt_set(sc->video_avcc->priv_data, sp.codec_priv_key, sp.codec_priv_value, 0);
 
@@ -106,11 +111,20 @@ int prepare_video_encoder(StreamingContext *sc, AVCodecContext *decoder_ctx, AVR
         sc->video_avcc->pix_fmt = decoder_ctx->pix_fmt;
 
     sc->video_avcc->bit_rate = 2 * 1000 * 1000;
+    //sc->video_avcc->bit_rate = 400000;
+
     sc->video_avcc->rc_buffer_size = 4 * 1000 * 1000;
     sc->video_avcc->rc_max_rate = 2 * 1000 * 1000;
     sc->video_avcc->rc_min_rate = 2.5 * 1000 * 1000;
-
+/*
+    sc->video_avcc->gop_size = 3;
+    sc->video_avcc->max_b_frames = 2;
+*/
     sc->video_avcc->time_base = av_inv_q(input_framerate);
+/*
+    sc->video_avcc->time_base.num = 1;
+    sc->video_avcc->time_base.den = 30;
+*/
     sc->video_avs->time_base = sc->video_avcc->time_base;
 
     if (avcodec_open2(sc->video_avcc, sc->video_avc, NULL) < 0) {printf("could not open the codec"); return -1;}
@@ -177,7 +191,10 @@ int encode_video(StreamingContext *decoder, StreamingContext *encoder, AVFrame *
         output_packet->stream_index = decoder->video_index;
         output_packet->duration = encoder->video_avs->time_base.den / encoder->video_avs->time_base.num / decoder->video_avs->avg_frame_rate.num * decoder->video_avs->avg_frame_rate.den;
 
-        av_packet_rescale_ts(output_packet, decoder->video_avs->time_base, encoder->video_avs->time_base);
+        //av_packet_rescale_ts(output_packet, decoder->video_avs->time_base, encoder->video_avs->time_base);
+        av_packet_rescale_ts(output_packet,decoder->video_avs->time_base ,encoder->video_avcc->time_base);
+        output_packet->dts = av_rescale_q(output_packet->dts, encoder->video_avcc->time_base, decoder->video_avcc->time_base);
+
         response = av_interleaved_write_frame(encoder->avfc, output_packet);
         if (response != 0) {  return -1;}
     }
@@ -243,8 +260,27 @@ int transcode_video(StreamingContext *decoder, StreamingContext *encoder, AVPack
             return response;
         }
 
+        // Convert the image from its native format to RGB
+        AVFrame *pFrameConv = nullptr;
+        pFrameConv = av_frame_alloc();
+/*
+        pFrameConv->format = AV_PIX_FMT_YUV420P;
+        pFrameConv->width = decoder->video_avcc->width;
+        pFrameConv->height = decoder->video_avcc->height;
+        av_frame_get_buffer(pFrameConv, 32);
+        */
+
+        int nbytes = av_image_get_buffer_size(encoder->video_avcc->pix_fmt,encoder->video_avcc->width,encoder->video_avcc->height,32);
+        uint8_t *video_outbuf = (uint8_t*)av_malloc(nbytes);
+        av_image_fill_arrays(pFrameConv->data, pFrameConv->linesize, video_outbuf, AV_PIX_FMT_YUV420P, pFrameConv->width = decoder->video_avcc->width, pFrameConv->height = decoder->video_avcc->height, 32);
+        pFrameConv->format = AV_PIX_FMT_YUV420P;
+
+        struct SwsContext *sws_ctx = nullptr;
+        sws_ctx = sws_getContext(decoder->video_avcc->width, decoder->video_avcc->height, decoder->video_avcc->pix_fmt,decoder->video_avcc->width, decoder->video_avcc->height, AV_PIX_FMT_RGB24, SWS_BILINEAR,nullptr,nullptr,nullptr);
+        sws_scale(sws_ctx, input_frame->data, input_frame->linesize, 0, decoder->video_avcc->height, pFrameConv->data, pFrameConv->linesize );
+
         if (response >= 0) {
-            if (encode_video(decoder, encoder, input_frame)) return -1;
+            if (encode_video(decoder, encoder, pFrameConv)) return -1;
         }
         av_frame_unref(input_frame);
     }
@@ -253,13 +289,14 @@ int transcode_video(StreamingContext *decoder, StreamingContext *encoder, AVPack
 
 int main(int argc, char *argv[])
 {
+    avdevice_register_all();
     /*
      * H264 -> H265
      * Audio -> remuxed (untouched)
      * MP4 - MP4
      */
     StreamingParams sp = {0};
-    sp.copy_audio = 1;
+    sp.copy_audio = 0;
     sp.copy_video = 0;
     sp.video_codec = "libx265";
     sp.codec_priv_key = "x265-params";
@@ -270,12 +307,12 @@ int main(int argc, char *argv[])
      * Audio -> remuxed (untouched)
      * MP4 - MP4
      */
-    //StreamingParams sp = {0};
-    //sp.copy_audio = 1;
-    //sp.copy_video = 0;
-    //sp.video_codec = "libx264";
-    //sp.codec_priv_key = "x264-params";
-    //sp.codec_priv_value = "keyint=60:min-keyint=60:scenecut=0:force-cfr=1";
+//    StreamingParams sp = {0};
+//    sp.copy_audio = 0;
+//    sp.copy_video = 0;
+//    sp.video_codec = "libx264";
+//    sp.codec_priv_key = "x264-params";
+//    sp.codec_priv_value = "keyint=60:min-keyint=60:scenecut=0:force-cfr=1";
 
     /*
      * H264 -> H264 (fixed gop)
@@ -326,9 +363,7 @@ int main(int argc, char *argv[])
     if (sp.output_extension)
         strcat(encoder->filename, sp.output_extension);
 
-    AVInputFormat *ift = av_find_input_format("x11grab");
-
-    if (open_media(decoder->filename, &decoder->avfc, ift)) return -1;
+    if (open_media(decoder->filename, &decoder->avfc)) return -1;
     if (prepare_decoder(decoder)) return -1;
 
     avformat_alloc_output_context2(&encoder->avfc, NULL, NULL, encoder->filename);
@@ -340,13 +375,13 @@ int main(int argc, char *argv[])
     } else {
         if (prepare_copy(encoder->avfc, &encoder->video_avs, decoder->video_avs->codecpar)) {return -1;}
     }
-
+/*
     if (!sp.copy_audio) {
         if (prepare_audio_encoder(encoder, decoder->audio_avcc->sample_rate, sp)) {return -1;}
     } else {
         if (prepare_copy(encoder->avfc, &encoder->audio_avs, decoder->audio_avs->codecpar)) {return -1;}
     }
-
+*/
     if (encoder->avfc->oformat->flags & AVFMT_GLOBALHEADER)
         encoder->avfc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
@@ -370,9 +405,12 @@ int main(int argc, char *argv[])
 
     AVPacket *input_packet = av_packet_alloc();
     if (!input_packet) {printf("failed to allocated memory for AVPacket"); return -1;}
-
+ int esci =0;
     while (av_read_frame(decoder->avfc, input_packet) >= 0)
     {
+        if(esci++ == 100){
+            break;
+        }
         if (decoder->avfc->streams[input_packet->stream_index]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
             if (!sp.copy_video) {
                 // TODO: refactor to be generic for audio and video (receiving a function pointer to the differences)
