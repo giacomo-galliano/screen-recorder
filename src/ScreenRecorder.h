@@ -10,32 +10,52 @@ extern "C"
 #include <inttypes.h>
 #include <libavutil/imgutils.h>
 }
+#include <iostream>
 
+typedef struct StreamingParams{
+    char videoCodec;
+    char audioCodec;
+
+}StreamingParams;
+
+typedef  struct StreamingContext {
+    AVFormatContext *fctx;
+    AVCodec *videoCodec;
+    AVCodec *audioCodec;
+    AVStream *videoStream;
+    AVStream *audioStream;
+    AVCodecContext *videoCodecContex;
+    int videoIndex;
+    int audioIndex;
+}StreamingContext;
 
 class ScreenRecorder {
 
+    char *outFilename;
+
     AVFormatContext *inFormatCtx, *outFormatCtx;
     AVInputFormat* ift;
+
+    AVDictionary *muxerOptions;
 
     int videoIndex, audioIndex;
 
     AVStream *inVideoStream, *inAudioStream, *outVideoStream, *outAudioStream;
 
-    AVCodecContext *decoderCtx, *encoderCtx;
-    AVCodec *decoder, *encoder;
+    AVCodecContext *decoderCCtx, *encoderCCtx;
+    AVCodec *decoderC, *encoderC;
 
     AVPacket *inPacket, *outPacket;
     AVFrame *frame, *frameConv;
 
+    int fillStreamInfo();
+
 public:
     ScreenRecorder();
     ~ScreenRecorder();
+    int PrepareDecoder();
+    int openInput();
 };
-
-bool sr_init();
-bool sr_decode();
-bool sr_store();
-void sr_clear();
 
 
 #endif //SCREEN_RECORDER_SCREENRECORDER_H
