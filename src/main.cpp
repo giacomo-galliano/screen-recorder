@@ -46,12 +46,12 @@ int main(int argc, char **argv) {
     }
 
     AVDictionary *options = nullptr;
-    int val = av_dict_set(&options, "framerate", "48", 0);
+    int val = av_dict_set(&options, "framerate", "120", 0);
     if(val != 0){
         std::cout << "Error setting dictionary value" << std::endl;
     }
 
-    val = av_dict_set(&options, "preset", "medium", 0);
+    val = av_dict_set(&options, "preset", "nolatency", 0);
     if(val != 0){
         std::cout << "Error setting dictionary value" << std::endl;
     }
@@ -104,6 +104,10 @@ int main(int argc, char **argv) {
     }
 
     // Get a pointer to the codec context for the video stream
+    /*
+     * take the codec parameters from the stream that we just opened and copy them to the codec context
+     * ->it's like saying the decoder to decode "this specific track"
+     */
     int res = avcodec_parameters_to_context(decoderCtx, videoStream->codecpar);
     if (res < 0) {
         //failed to set parameters
@@ -118,11 +122,25 @@ int main(int argc, char **argv) {
         exit(-1);
     }
 
+    /*
+     * initialize the decoder
+     */
     if (avcodec_open2(decoderCtx, decoder, nullptr) < 0) {
         std::cout << "Could not open the decoder." << std::endl;
         decoderCtx = nullptr;
         exit(-1);
     }
+
+    /*
+     * se metto tutto in una funzione "open_best_stream(AVFormatContext &fmtCtx)
+     * posso nel return prendere il puntatore al codecCtx appena creato e wrapparlo in uno unique pointer così che si
+     * pulisca automaticamente quando esce dallo scope
+     *
+     * return {videoIndex, AVCodecContext(codecCtx, [](AVCodecContext *avctx){
+     *      auto pavctx = &avctx;
+     *      avcodec_free_context(pavctx);
+     *      })};
+     */
 
 
     /*
@@ -144,13 +162,13 @@ int main(int argc, char **argv) {
     encoderCtx->codec_id = AV_CODEC_ID_MPEG4;// AV_CODEC_ID_MPEG4; // AV_CODEC_ID_H264 // AV_CODEC_ID_MPEG1VIDEO
     encoderCtx->codec_type = AVMEDIA_TYPE_VIDEO;
     encoderCtx->pix_fmt  = AV_PIX_FMT_YUV420P;
-    encoderCtx->bit_rate = 2500000;
-    encoderCtx->width = 1920;
-    encoderCtx->height = 1080;
-    encoderCtx->gop_size = 3;
-    encoderCtx->max_b_frames = 2;
+    encoderCtx->bit_rate = 2 * 1000 * 1000;
+    encoderCtx->width = decoderCtx->width;
+    encoderCtx->height = decoderCtx->height;
+    //encoderCtx->gop_size = 3;
+    //encoderCtx->max_b_frames = 2;
     encoderCtx->time_base.num = 1;
-    encoderCtx->time_base.den = 150; // 30->15fps
+    encoderCtx->time_base.den = 120; // 30->15fps
     
     encoder = avcodec_find_encoder((AV_CODEC_ID_MPEG4));
     if(!encoder){
@@ -178,7 +196,8 @@ int main(int argc, char **argv) {
             return -1;
         }
     }
-    int ret = avformat_write_header(outFormatCtx, &options);
+    //    int ret = avformat_write_header(outFormatCtx, &options);
+    int ret = avformat_write_header(outFormatCtx, nullptr);
     if (ret < 0) {
         std::cout << "Failed to write header" << std::endl;
         return -1;
@@ -191,13 +210,10 @@ int main(int argc, char **argv) {
      * ############ DECODING ###########
      */
 
-    AVPacket packet;
-    /*
-     AVPacket* packet = (AVPacket*)av_packet_alloc();
-    if(packet == NULL){
-        std::cout << "error allocating the packet" << std::endl;
-    }
-     */
+    AVPacket* packet;
+    packet = new AVPacket;
+
+
     AVFrame* frame = av_frame_alloc(); // allocate video frame
     if (!frame) {
         std::cout << "Couldn't allocate AVFrame" << std::endl;
@@ -208,22 +224,6 @@ int main(int argc, char **argv) {
         std::cout << "Couldn't allocate AVFrame" << std::endl;
         exit(-1);
     }
-
-    struct SwsContext *sws_ctx = nullptr;
-    int frameFinished;
-    // initialize SWS context for software scaling
-    sws_ctx = sws_getContext(decoderCtx->width,
-                             decoderCtx->height,
-                             decoderCtx->pix_fmt,
-                             encoderCtx->width,
-                             encoderCtx->height,
-                             encoderCtx->pix_fmt,
-                             SWS_BILINEAR,
-                             nullptr,
-                             nullptr,
-                             nullptr
-    );
-
 
     // Determine required buffer size and allocate buffer
     int n_bytes = av_image_get_buffer_size(encoderCtx->pix_fmt, encoderCtx->width,
@@ -240,16 +240,31 @@ int main(int argc, char **argv) {
         exit(-1);
     };
 
+    struct SwsContext *sws_ctx = nullptr;
+    int frameFinished;
+    // initialize SWS context for software scaling
+    sws_ctx = sws_getContext(decoderCtx->width,
+                             decoderCtx->height,
+                             decoderCtx->pix_fmt,
+                             encoderCtx->width,
+                             encoderCtx->height,
+                             encoderCtx->pix_fmt,
+                             SWS_BILINEAR,
+                             nullptr,
+                             nullptr,
+                             nullptr
+    );
+
     int index = 0;
-    int nframe = 200;
+    int nframe = 150;
     //loop as long we have a frame to read
-    while (av_read_frame(inFormatCtx, &packet) == 0) {
+    while (av_read_frame(inFormatCtx, packet) == 0) {
         if(index++ == nframe){
             break;
         }
         // JUST CHECKING VIDEO! NEED TO MODIFY FOR AUDIO
-        if(packet.stream_index != videoStream->index) continue;
-        res = avcodec_send_packet(decoderCtx, &packet);
+        if(packet->stream_index != videoStream->index) continue;
+        res = avcodec_send_packet(decoderCtx, packet);
         if(res<0){
             std::cout << "An error happened during the decoding phase" <<std::endl;
             exit(-1);
@@ -276,9 +291,12 @@ int main(int argc, char **argv) {
                 exit(1);
             }
         }
-        AVPacket outPacket;
+        AVPacket *outPacket;
+        outPacket = new AVPacket;
+        av_init_packet(outPacket);
+        outPacket->data = 0;
 
-        if ((res = avcodec_receive_packet(encoderCtx, &outPacket))==0) {
+        if ((res = avcodec_receive_packet(encoderCtx, outPacket))==0) {
             if (res == AVERROR(EAGAIN) || res== AVERROR_EOF){
                 return (res==AVERROR(EAGAIN)) ? 0:1;
             }
@@ -288,19 +306,18 @@ int main(int argc, char **argv) {
             }
 
             if (encoderCtx->coded_frame->pts != AV_NOPTS_VALUE)
-                outPacket.pts= av_rescale_q(encoderCtx->coded_frame->pts, encoderCtx->time_base, videoStream->time_base);
-            if(outPacket.dts != AV_NOPTS_VALUE)
-                outPacket.dts = av_rescale_q(outPacket.dts, encoderCtx->time_base, encoderCtx->time_base);
-            if(encoderCtx->coded_frame->key_frame)
-                outPacket.flags |= AV_PKT_FLAG_KEY;
+                outPacket->pts= av_rescale_q(encoderCtx->coded_frame->pts, encoderCtx->time_base, videoStream->time_base);
 
-            res= av_interleaved_write_frame(outFormatCtx, &outPacket);
+            if(encoderCtx->coded_frame->key_frame)
+                outPacket->flags |= AV_PKT_FLAG_KEY;
+
+            res= av_interleaved_write_frame(outFormatCtx, outPacket);
 
             if (res< 0) {
                 fprintf(stderr, "Error while writing video frame: %d\n", res);
                 exit(1);
             }
-            av_packet_unref(&outPacket);
+            av_packet_unref(outPacket);
         }
     }
 
@@ -311,6 +328,26 @@ int main(int argc, char **argv) {
             std::cout << "Failed to close file" << std::endl;
         }
     }
+
+/*
+    avcodec_close(videoStream->codec);
+    av_free(frame->data[0]);
+    av_free(frame);
+    if (pFrameConv) {
+        av_free(pFrameConv->data[0]);
+        av_free(pFrameConv);
+    }
+    av_free(buffer);
+*/
+
+    sws_freeContext(sws_ctx);
+    avformat_close_input(&inFormatCtx);
+    avformat_free_context(inFormatCtx);
+    av_frame_free(&frame);
+    av_frame_free(&pFrameConv);
+    av_packet_free(&packet);
+    avcodec_free_context(&decoderCtx);
+    avcodec_free_context(&encoderCtx);
 
     return 0;
 }
