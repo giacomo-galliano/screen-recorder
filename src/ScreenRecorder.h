@@ -33,8 +33,10 @@ class ScreenRecorder {
 
     char *outFilename;
 
-    AVFormatContext *inFormatCtx, *outFormatCtx;
+    AVFormatContext *inFormatCtx;
+    AVFormatContext *outFormatCtx;
     AVInputFormat* ift;
+    AVOutputFormat *oft;
 
     AVDictionary *muxerOptions;
 
@@ -55,6 +57,9 @@ public:
     ~ScreenRecorder();
     int PrepareDecoder();
     int openInput();
+    int prepareVideoEncoder();
+    int openOutput();
+    int writeHeader();
 };
 
 
