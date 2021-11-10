@@ -7,7 +7,7 @@ include_directories(include)
 
 add_executable(
         screen-recorder src/main.cpp
-        src/ScreenRecorder.cpp src/ScreenRecorder.h)
+        src/VideoRecorder.cpp src/VideoRecorder.h src/AudioRecorder.cpp src/AudioRecorder.h src/Orchestrator.cpp src/Orchestrator.h)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET

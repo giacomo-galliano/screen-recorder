@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <iostream>
-#include "ScreenRecorder.h"
+#include "VideoRecorder.h"
 
 void SaveFrame(AVFrame *pFrame, int width, int height, int iFrame);
 
@@ -69,6 +69,17 @@ int main(int argc, char **argv) {
         exit(-1);
     }
 
+    int audioIndex = -1;
+    for (int i = 0; i < inFormatCtx->nb_streams; i++)
+        if (inFormatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+            audioIndex = i;
+            break;
+        }
+    if (audioIndex == -1) {
+        std::cout << "Didn't find an audio stream." << std::endl;
+        exit(-1);
+    }
+
 /*
     int videoIndex = av_find_best_stream(inFormatCtx, AVMEDIA_TYPE_VIDEO, -1, -1, nullptr, 0);
     int audioIndex = av_find_best_stream(inFormatCtx, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
@@ -88,7 +99,7 @@ int main(int argc, char **argv) {
 
 
     AVStream* videoStream = inFormatCtx->streams[videoIndex];
-    //AVStream* audioStream = inFormatCtx->streams[audioIndex];
+    AVStream* audioStream = inFormatCtx->streams[audioIndex];
 
     /*
      * ######## DECODER #########
@@ -132,6 +143,38 @@ int main(int argc, char **argv) {
     }
 
     /*
+     * ################### DECODER AUIO ####################
+     */
+    AVCodecContext *decoderAudioCtx = nullptr; //this is a structure
+    AVCodec *decoderAudio = nullptr; //it describes the decoder
+
+    decoderAudioCtx = avcodec_alloc_context3(decoderAudio);
+    if (!decoderCtx) {
+        std::cout << "Error allocating audio decoder context" << std::endl;
+        avformat_close_input(&inFormatCtx);
+        exit(-1);
+    }
+
+    res = avcodec_parameters_to_context(decoderAudioCtx, audioStream->codecpar);
+    if (res < 0) {
+        //failed to set parameters
+        avformat_close_input(&inFormatCtx);
+        avcodec_free_context(&decoderAudioCtx);
+    }
+
+    decoderAudio = avcodec_find_decoder(decoderAudioCtx->codec_id);
+    if (decoderAudio == nullptr) {
+        std::cout << "Audio codec not supported." << std::endl;
+        exit(-1);
+    }
+
+    if (avcodec_open2(decoderAudioCtx, decoderAudio, nullptr) < 0) {
+        std::cout << "Could not open the audio decoder." << std::endl;
+        decoderAudioCtx = nullptr;
+        exit(-1);
+    }
+
+    /*
      * se metto tutto in una funzione "open_best_stream(AVFormatContext &fmtCtx)
      * posso nel return prendere il puntatore al codecCtx appena creato e wrapparlo in uno unique pointer così che si
      * pulisca automaticamente quando esce dallo scope
@@ -167,8 +210,8 @@ int main(int argc, char **argv) {
     encoderCtx->height = decoderCtx->height;
     //encoderCtx->gop_size = 3;
     //encoderCtx->max_b_frames = 2;
-    encoderCtx->time_base.num = 1;
-    encoderCtx->time_base.den = 120; // 30->15fps
+    //encoderCtx->time_base.num = 1;
+    //encoderCtx->time_base.den = 120; // 30->15fps
     
     encoder = avcodec_find_encoder((AV_CODEC_ID_MPEG4));
     if(!encoder){
@@ -212,7 +255,8 @@ int main(int argc, char **argv) {
 
     AVPacket* packet;
     packet = new AVPacket;
-
+    av_init_packet(packet);
+    packet->data = 0;
 
     AVFrame* frame = av_frame_alloc(); // allocate video frame
     if (!frame) {
@@ -311,6 +355,8 @@ int main(int argc, char **argv) {
             if(encoderCtx->coded_frame->key_frame)
                 outPacket->flags |= AV_PKT_FLAG_KEY;
 
+            std::cout << "stream fps " << videoStream->avg_frame_rate.num << " fps_den "<< videoStream->avg_frame_rate.den << " time_base " << videoStream->time_base.num << "/" << videoStream->time_base.den << std::endl;
+            std::cout  << "Frame " << index << " size " << outPacket->size << " pts " << outPacket->pts << " dts " << outPacket->dts << std::endl;
             res= av_interleaved_write_frame(outFormatCtx, outPacket);
 
             if (res< 0) {
