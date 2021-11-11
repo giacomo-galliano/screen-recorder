@@ -11,6 +11,9 @@ extern "C"
 #include <libavutil/imgutils.h>
 }
 
+#include <iostream>
+#include <string>
+#include <memory>
 #include "AudioRecorder.h";
 #include "VideoRecorder.h";
 
@@ -23,6 +26,7 @@ public:
     Orchestrator();
     ~Orchestrator();
 
+    void openInput(const std::string& url);
 
 };
 
