@@ -11,7 +11,7 @@ extern "C"
 #include <libavutil/imgutils.h>
 }
 #include <iostream>
-
+/*
 typedef struct StreamingParams{
     char videoCodec;
     char audioCodec;
@@ -28,7 +28,7 @@ typedef  struct StreamingContext {
     int videoIndex;
     int audioIndex;
 }StreamingContext;
-
+*/
 class ScreenRecorder {
 
     char *outFilename;
@@ -48,9 +48,12 @@ class ScreenRecorder {
     AVCodec *decoderC, *encoderC;
 
     AVPacket *inPacket, *outPacket;
-    AVFrame *frame, *frameConv;
+    AVFrame *inFrame, *convFrame;
 
     int fillStreamInfo();
+    int transcodeVideo(int indexFrame, SwsContext *pContext);
+    int encodeVideo();
+    void flushAll();
 
 public:
     ScreenRecorder();
@@ -60,6 +63,8 @@ public:
     int prepareVideoEncoder();
     int openOutput();
     int writeHeader();
+    int decoding();
+    int writeTrailer();
 };
 
 
