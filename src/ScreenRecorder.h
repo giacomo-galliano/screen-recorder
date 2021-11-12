@@ -52,7 +52,7 @@ class ScreenRecorder {
 
     int fillStreamInfo();
     int transcodeVideo(int indexFrame, SwsContext *pContext);
-    int encodeVideo();
+    int encodeVideo(int i);
     void flushAll();
 
 public:
