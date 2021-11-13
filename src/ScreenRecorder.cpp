@@ -4,6 +4,7 @@ ScreenRecorder::ScreenRecorder() {
     avformat_network_init();
     avdevice_register_all();
 
+
     outFilename = "../media/output.mp4";
     muxerOptions = nullptr;
 }
@@ -31,6 +32,7 @@ int ScreenRecorder::fillStreamInfo() {
         avcodec_free_context(&decoderCCtx);
         return -2;
     }
+    decoderCCtx->time_base = inVideoStream->time_base;
 
     if (avcodec_open2(decoderCCtx, decoderC, nullptr) < 0) {
         std::cout << "failed to open decoder." << std::endl;
@@ -67,7 +69,12 @@ int ScreenRecorder::openInput() {
         return(-1);
     }
     ift = av_find_input_format("x11grab");
-    if (avformat_open_input(&inFormatCtx, ":0.0", ift, nullptr) != 0) {
+    AVDictionary* options = NULL;
+//    av_dict_set(&options,"framerate","10000",0);
+    av_dict_set(&options,"video_size","wxga",0);
+//    av_dict_set(&options, "crf", "12", 0);
+    inFormatCtx->probesize = 40000000;
+    if (avformat_open_input(&inFormatCtx, ":0.0", ift, &options) != 0) {
         std::cout << "Couldn't open the video file" << std::endl;
         exit(-2);
     };
@@ -107,9 +114,9 @@ int ScreenRecorder::prepareVideoEncoder() {
         return -4;
     }
 
-    outVideoStream->time_base = (AVRational){25, 1};
+    outVideoStream->time_base = decoderCCtx->time_base; //(AVRational){100000, 1};
 //    encoderCCtx->sample_fmt = encoderC->sample_fmts ? encoderC->sample_fmts[0] : AV_SAMPLE_FMT_S16;
-    encoderCCtx->time_base = outVideoStream->time_base;
+    encoderCCtx->time_base = decoderCCtx->time_base;
     encoderCCtx->width = decoderCCtx->width;
     encoderCCtx->height = decoderCCtx->height;
     encoderCCtx->pix_fmt  = AV_PIX_FMT_YUV420P;
@@ -123,6 +130,7 @@ int ScreenRecorder::prepareVideoEncoder() {
 //    av_opt_set(encoderCCtx->priv_data, "profile", "main", 0);
     av_opt_set(encoderCCtx->priv_data, "preset", "medium", 0);
 //    av_opt_set(encoderCCtx->priv_data, "b-pyramid", "0", 0);
+
 
     /*default setings x264*/
 //    encoderCCtx->me_range = 16;
@@ -194,6 +202,7 @@ int ScreenRecorder::openOutput() {
 
     av_dump_format(outFormatCtx, 0, outFilename, 1);
 
+
     if (!(outFormatCtx->oformat->flags & AVFMT_NOFILE)) {
         //avio_open2(&outFormatCtx->pb, filename_out, AVIO_FLAG_WRITE, NULL, NULL);
         if ( avio_open2(&outFormatCtx->pb, outFilename, AVIO_FLAG_WRITE, nullptr, nullptr) < 0) {
@@ -210,6 +219,7 @@ int ScreenRecorder::writeHeader() {
 //    av_dict_set(&muxerOptions, "x264-params", "keyint=60:min-keyint=60:scenecut=0", 0);
 //    av_dict_set(&muxerOptions, "movflags", "faststart", 0);
 //    av_dict_set(&muxerOptions, "brand", "mp42", 0);
+//    av_dict_set( &muxerOptions,"framerate","60",0 );
 
 
     if (avformat_write_header(outFormatCtx, &muxerOptions) < 0) {
@@ -271,6 +281,8 @@ int ScreenRecorder::transcodeVideo(int indexFrame, SwsContext *pContext) {
     /* JUST CHECKING VIDEO! NEED TO MODIFY FOR AUDIO
     if(inPacket->stream_index != inVideoStream->index) continue;
 */
+    av_packet_rescale_ts(inPacket, inVideoStream->time_base, decoderCCtx->time_base);
+
     int res = avcodec_send_packet(decoderCCtx, inPacket);
     if(res<0){
         std::cout << "An error happened during the decoding phase" <<std::endl;
@@ -306,7 +318,8 @@ int ScreenRecorder::transcodeVideo(int indexFrame, SwsContext *pContext) {
         convFrame->width = encoderCCtx->width;
         convFrame->height = encoderCCtx->height;
         convFrame->format = encoderCCtx->pix_fmt;
-        convFrame->pts = indexFrame;//av_rescale_q(inFrame->pts, encoderCCtx->time_base, outVideoStream->time_base);//((1.0/25) * 60 * indexFrame);//inFrame->pts;
+        convFrame->pts = inFrame->pts;
+//        convFrame->pts = av_rescale_q(convFrame->pts, decoderCCtx->time_base, encoderCCtx->time_base);//inFrame->pts; //((1.0/25) * 60 * indexFrame);//indexFrame;//av_rescale_q(inFrame->pts, encoderCCtx->time_base, outVideoStream->time_base);//inFrame->pts;
 //        av_frame_get_buffer(convFrame, 0);
 
         sws_scale(pContext, (uint8_t const *const *) inFrame->data,
@@ -344,25 +357,27 @@ int ScreenRecorder::encodeVideo(int i) {
         }
 
         outPacket->stream_index = videoIndex;
-        outPacket->pts = i*100;
-//        outPacket->dts = i;
-//        outPacket->duration = 1;//outVideoStream->time_base.den / outVideoStream->time_base.num / inVideoStream->avg_frame_rate.num * inVideoStream->avg_frame_rate.den;
+        outPacket->duration = outVideoStream->time_base.den / outVideoStream->time_base.num / inVideoStream->avg_frame_rate.num * inVideoStream->avg_frame_rate.den;
+//        av_packet_rescale_ts(outPacket, decoderCCtx->time_base, encoderCCtx->time_base);
+
+        outPacket->dts = av_rescale_q(outPacket->dts, encoderCCtx->time_base, decoderCCtx->time_base) - 1636822723743746;
+        outPacket->pts = av_rescale_q(outPacket->pts, encoderCCtx->time_base, decoderCCtx->time_base) - 1636822723743746;
+
+//        outPacket->duration = av_rescale_q(outPacket->duration, decoderCCtx->time_base, encoderCCtx->time_base );
+
+//        outPacket->pts = av_rescale_q(i, AV_TIME_BASE_Q, outVideoStream->time_base);
+//        outPacket->dts = av_rescale_q(outPacket->dts, encoderCCtx->time_base, decoderCCtx->time_base);
 /*
         if (encoderCCtx->coded_frame->pts != AV_NOPTS_VALUE)
         outPacket->pts= av_rescale_q(encoderCCtx->coded_frame->pts, encoderCCtx->time_base, inVideoStream->time_base);
         if(outPacket->dts != AV_NOPTS_VALUE)
             outPacket->dts = av_rescale_q(outPacket->dts, encoderCCtx->time_base, decoderCCtx->time_base);
 */
-//        if(encoderCCtx->coded_frame->key_frame)
-            outPacket->flags |= AV_PKT_FLAG_KEY;
-
-            outPacket->duration = 1;
-
-
-//        av_packet_rescale_ts(outPacket, decoderCCtx->time_base, encoderCCtx->time_base);
 //        outPacket->dts = av_rescale_q(outPacket->dts, encoderCCtx->time_base, decoderCCtx->time_base);
 
-        std::cout << "before write frame: " << outPacket->flags << " " <<outPacket->pts << " " << outPacket->dts << " duration " << outPacket->duration << res << std::endl;
+//        if(encoderCCtx->coded_frame->key_frame)
+        outPacket->flags |= AV_PKT_FLAG_KEY;
+        std::cout << "before write frame: " << outPacket->pts << " " << outPacket->dts << " duration " << outPacket->duration << res << std::endl;
 
         res = av_interleaved_write_frame(outFormatCtx, outPacket);
         if (res != 0) {
