@@ -23,11 +23,11 @@ int ScreenRecorder::fillStreamInfo() {
     vDecoderCCtx = avcodec_alloc_context3(vDecoderC);
     if (!vDecoderCCtx) {
         std::cout << "Error allocating video decoder context" << std::endl;
-        avformat_close_input(&inFormatCtx);
+        avformat_close_input(&videoInFormatCtx);
         return -1;
     }
     if(avcodec_parameters_to_context(vDecoderCCtx, inVideoStream->codecpar)){
-        avformat_close_input(&inFormatCtx);
+        avformat_close_input(&videoInFormatCtx);
         avcodec_free_context(&vDecoderCCtx);
         return -2;
     }
@@ -71,8 +71,8 @@ int ScreenRecorder::fillStreamInfo() {
 
 int ScreenRecorder::PrepareDecoder() {
     for (int i = 0; i < videoInFormatCtx->nb_streams; i++) {
-        if (inFormatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-            inVideoStream = inFormatCtx->streams[i];
+        if (videoInFormatCtx->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+            inVideoStream = videoInFormatCtx->streams[i];
             videoIndex = i;
         }
     }
@@ -100,11 +100,18 @@ int ScreenRecorder::PrepareDecoder() {
 
 int ScreenRecorder::openInput() {
 
-    inFormatCtx = avformat_alloc_context();
-    if (!inFormatCtx) {
+    videoInFormatCtx = avformat_alloc_context();
+    if (!videoInFormatCtx) {
         std::cout << "Couldn't create input AVFormatContext" << std::endl;
         return(-1);
     }
+
+    audioInFormatCtx = avformat_alloc_context();
+    if (!audioInFormatCtx) {
+        std::cout << "Couldn't create input AVFormatContext" << std::endl;
+        return(-1);
+    }
+
     vIft = av_find_input_format("x11grab");
     aIft = av_find_input_format("pulse");
     AVDictionary* options = NULL;
