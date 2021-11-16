@@ -6,36 +6,21 @@ extern "C"
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
+#include <libswresample/swresample.h>
 #include <libavdevice/avdevice.h>
 #include <inttypes.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/audio_fifo.h>
 }
 #include <iostream>
-/*
-typedef struct StreamingParams{
-    char videoCodec;
-    char audioCodec;
 
-}StreamingParams;
-
-typedef  struct StreamingContext {
-    AVFormatContext *fctx;
-    AVCodec *videoCodec;
-    AVCodec *audioCodec;
-    AVStream *videoStream;
-    AVStream *audioStream;
-    AVCodecContext *videoCodecContex;
-    int videoIndex;
-    int audioIndex;
-}StreamingContext;
-*/
 class ScreenRecorder {
 
     char *outFilename;
 
-    AVFormatContext *inFormatCtx;
+    AVFormatContext *videoInFormatCtx, *audioInFormatCtx;
     AVFormatContext *outFormatCtx;
-    AVInputFormat* ift;
+    AVInputFormat *vIft, *aIft;
     AVOutputFormat *oft;
 
     AVDictionary *muxerOptions;
@@ -44,8 +29,10 @@ class ScreenRecorder {
 
     AVStream *inVideoStream, *inAudioStream, *outVideoStream, *outAudioStream;
 
-    AVCodecContext *decoderCCtx, *encoderCCtx;
-    AVCodec *decoderC, *encoderC;
+    AVCodecContext *vDecoderCCtx, *vEncoderCCtx, *aDecoderCCtx, *aEncoderCCtx;
+    AVCodec *vDecoderC, *vEncoderC, *aDecoderC, *aEncoderC;
+
+    AVAudioFifo *audioFifo;
 
     AVPacket *inPacket, *outPacket;
     AVFrame *inFrame, *convFrame;
@@ -53,7 +40,8 @@ class ScreenRecorder {
 
     int fillStreamInfo();
     int transcodeVideo(int indexFrame, SwsContext *pContext);
-    int encodeVideo(int i);
+    int transcodeAudio(int indexFrame, SwrContext *pContext);
+    int encode(int i, int streamIndex, AVCodecContext* cctx, AVStream* outStream);
     void flushAll();
 
 public:
@@ -61,7 +49,7 @@ public:
     ~ScreenRecorder();
     int PrepareDecoder();
     int openInput();
-    int prepareVideoEncoder();
+    int prepareEncoder();
     int openOutput();
     int writeHeader();
     int decoding();
