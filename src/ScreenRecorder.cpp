@@ -118,7 +118,7 @@ int ScreenRecorder::openInput() {
 //    av_dict_set(&options,"framerate","10000",0);
 //    av_dict_set(&options,"video_size","wxga",0);
 //    av_dict_set(&options, "crf", "12", 0);
-//    inFormatCtx->probesize = 40000000;
+    videoInFormatCtx->probesize = 40000000;
 
     if (avformat_open_input(&videoInFormatCtx, ":0.0", vIft, &options) != 0) {
         std::cout << "Couldn't open the video file" << std::endl;
@@ -296,7 +296,6 @@ int ScreenRecorder::decoding() {
                              nullptr
     );
 
-    const AVSampleFormat requireAudioFmt = AV_SAMPLE_FMT_FLTP;
     SwrContext* swr_ctx;
     swr_ctx = swr_alloc_set_opts(nullptr,
                                  av_get_default_channel_layout(aDecoderCCtx->channels),
@@ -320,10 +319,11 @@ int ScreenRecorder::decoding() {
             break;
         }
         if (videoInFormatCtx->streams[inPacket->stream_index]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-            if (transcodeVideo(i, sws_ctx)) return -1;
+            if (transcodeVideo(&i, sws_ctx)) return -1;
             av_packet_unref(inPacket);
         }else if (audioInFormatCtx->streams[inPacket->stream_index]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO){
-                //TODO: transcodeAudio()
+               if(transcodeAudio(&i, swr_ctx)) return -1;
+            av_packet_unref(inPacket);
         }else {
             std::cout << "ignoring all non video or audio packets" << std::endl;
         }
@@ -331,7 +331,7 @@ int ScreenRecorder::decoding() {
     return 0;
 }
 
-int ScreenRecorder::transcodeVideo(int indexFrame, SwsContext *pContext) {
+int ScreenRecorder::transcodeVideo(int* indexFrame, SwsContext *pContext) {
     /* JUST CHECKING VIDEO! NEED TO MODIFY FOR AUDIO
     if(inPacket->stream_index != inVideoStream->index) continue;
 */
@@ -390,7 +390,7 @@ int ScreenRecorder::transcodeVideo(int indexFrame, SwsContext *pContext) {
     return 0;
 }
 
-int ScreenRecorder::transcodeAudio(int indexFrame, SwrContext *pContext) {
+int ScreenRecorder::transcodeAudio(int* indexFrame, SwrContext *pContext) {
 
     int res = avcodec_send_packet(aDecoderCCtx, inPacket);
     if(res<0){
@@ -413,31 +413,28 @@ int ScreenRecorder::transcodeAudio(int indexFrame, SwrContext *pContext) {
             return -1;
         }
 
-        uint8_t *buffer = (uint8_t *) av_malloc(av_image_get_buffer_size(vEncoderCCtx->pix_fmt, vEncoderCCtx->width,vEncoderCCtx->height, 1));
-        if(buffer==NULL){
-            std::cout << "unable to allocate memory for the buffer" << std::endl;
-            return -1;
+        uint8_t **cSamples = nullptr;
+        res = av_samples_alloc_array_and_samples(&cSamples, NULL, aEncoderCCtx->channels, inFrame->nb_samples, requireAudioFmt, 0);
+        if (res < 0) {
+             std::cout << "Fail to alloc samples by av_samples_alloc_array_and_samples." << std::endl;
         }
-        if((av_image_fill_arrays(convFrame->data, convFrame->linesize, buffer, vEncoderCCtx->pix_fmt, vEncoderCCtx->width,
-                                 vEncoderCCtx->height, 1)) <0){
-            std::cout << "An error occured while filling the image array" << std::endl;
-            return -1;
-        };
+        res = swr_convert(pContext, cSamples, inFrame->nb_samples, (const uint8_t**)inFrame->extended_data, inFrame->nb_samples);
+        if (res < 0) {
+            std::cout << "Failed swr_convert." << std::endl;
+        }
+        if (av_audio_fifo_space(audioFifo) < inFrame->nb_samples) {
+            std::cout << "audio buffer is too small." << std::endl;
+        }
 
-        convFrame->width = vEncoderCCtx->width;
-        convFrame->height = vEncoderCCtx->height;
-        convFrame->format = vEncoderCCtx->pix_fmt;
-        convFrame->pts = inFrame->pts;
+        res = av_audio_fifo_write(audioFifo, (void**)cSamples, inFrame->nb_samples);
+        if (res < 0) {
+            throw std::runtime_error("Fail to write fifo");
+        }
 
-//        convFrame->pts = av_rescale_q(convFrame->pts, vDecoderCCtx->time_base, vEncoderCCtx->time_base);//inFrame->pts; //((1.0/25) * 60 * indexFrame);//indexFrame;//av_rescale_q(inFrame->pts, vEncoderCCtx->time_base, outVideoStream->time_base);//inFrame->pts;
-//        av_frame_get_buffer(convFrame, 0);
-
-        sws_scale(pContext, (uint8_t const *const *) inFrame->data,
-                  inFrame->linesize, 0, vDecoderCCtx->height,
-                  convFrame->data, convFrame->linesize);
+        av_freep(&cSamples[0]);
 
         if (res >= 0) {
-            if (encode(indexFrame, videoIndex, vEncoderCCtx, outVideoStream)) return -1;
+            if (encode(indexFrame, audioIndex, aEncoderCCtx, outAudioStream)) return -1;
         }
         av_frame_unref(inFrame);
 
@@ -447,20 +444,20 @@ int ScreenRecorder::transcodeAudio(int indexFrame, SwrContext *pContext) {
 }
 
 
-int ScreenRecorder::encode(int i, int streamIndex, AVCodecContext* cctx, AVStream* outStream) {
+int ScreenRecorder::encode(int* i, int streamIndex, AVCodecContext* cctx, AVStream* outStream) {
     outPacket = av_packet_alloc();
     if (!outPacket) {
         std::cout << "could not allocate memory for output packet" << std::endl;
         return -1;
     }
-    int  res = avcodec_send_frame(vEncoderCCtx, convFrame);
+    int  res = avcodec_send_frame(cctx, convFrame);
     if (res < 0) {
         std::cout << "Error sending a frame for encoding" << std::endl;
         return -1;
     }
 
     while (res >= 0){
-        res = avcodec_receive_packet(vEncoderCCtx, outPacket);
+        res = avcodec_receive_packet(cctx, outPacket);
         if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) {
             break;
         } else if (res < 0) {
@@ -468,14 +465,14 @@ int ScreenRecorder::encode(int i, int streamIndex, AVCodecContext* cctx, AVStrea
             return -1;
         }
 
-        outPacket->stream_index = videoIndex;
+        outPacket->stream_index = streamIndex;
 
-        outPacket->pts = i;
-        outPacket->dts = i-20;
+        outPacket->pts = *i;
+        outPacket->dts = *i-20;
         outPacket->duration = 60;
-        i += 60; //inizia da 1 secondo a visualizzare, ma il video , vautare se aggiornarlo dopo
+        *i += 60; //inizia da 1 secondo a visualizzare, ma il video , vautare se aggiornarlo dopo
 //        outPacket->duration = outVideoStream->time_base.den / outVideoStream->time_base.num / inVideoStream->avg_frame_rate.num * inVideoStream->avg_frame_rate.den;
-        av_packet_rescale_ts(outPacket, vEncoderCCtx->time_base, outVideoStream->time_base);
+        av_packet_rescale_ts(outPacket, cctx->time_base, outStream->time_base);
 
 //        outPacket->dts = av_rescale_q(outPacket->dts, outVideoStream->time_base, inVideoStream->time_base);
 //        outPacket->pts = av_rescale_q(outPacket->pts, outVideoStream->time_base, inVideoStream->time_base);

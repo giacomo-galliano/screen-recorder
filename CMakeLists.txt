@@ -17,6 +17,7 @@ pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
         libavformat
         libavutil
         libswscale
+        libswresample
         )
 
 target_link_libraries(${PROJECT_NAME}

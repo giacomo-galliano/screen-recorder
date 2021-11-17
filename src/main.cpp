@@ -8,7 +8,7 @@ ScreenRecorder* sc = new ScreenRecorder;
 
     sc->openInput();
     sc->PrepareDecoder();
-    sc->prepareVideoEncoder();
+    sc->prepareEncoder();
     sc->openOutput();
     sc->writeHeader();
     sc->decoding();

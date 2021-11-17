@@ -16,6 +16,8 @@ extern "C"
 
 class ScreenRecorder {
 
+    const AVSampleFormat requireAudioFmt = AV_SAMPLE_FMT_FLTP;
+
     char *outFilename;
 
     AVFormatContext *videoInFormatCtx, *audioInFormatCtx;
@@ -39,9 +41,9 @@ class ScreenRecorder {
     int i;
 
     int fillStreamInfo();
-    int transcodeVideo(int indexFrame, SwsContext *pContext);
-    int transcodeAudio(int indexFrame, SwrContext *pContext);
-    int encode(int i, int streamIndex, AVCodecContext* cctx, AVStream* outStream);
+    int transcodeVideo(int* indexFrame, SwsContext *pContext);
+    int transcodeAudio(int* indexFrame, SwrContext *pContext);
+    int encode(int* i, int streamIndex, AVCodecContext* cctx, AVStream* outStream);
     void flushAll();
 
 public:
