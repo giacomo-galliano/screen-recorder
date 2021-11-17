@@ -38,10 +38,9 @@ class ScreenRecorder {
 
     AVPacket *inPacket, *outPacket;
     AVFrame *inFrame, *convFrame;
-    int i;
 
     int fillStreamInfo();
-    int transcodeVideo(int* indexFrame, SwsContext *pContext);
+    int transcodeVideo(int* index, SwsContext *pContext);
     int transcodeAudio(int* indexFrame, SwrContext *pContext);
     int encode(int* i, int streamIndex, AVCodecContext* cctx, AVStream* outStream);
     void flushAll();

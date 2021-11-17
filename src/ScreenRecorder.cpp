@@ -214,7 +214,6 @@ int ScreenRecorder::prepareEncoder() {
         aEncoderCCtx->time_base.num = 1;
         aEncoderCCtx->time_base.den = aEncoderCCtx->sample_rate;
 
-
         if (avcodec_open2(aEncoderCCtx, aEncoderC, nullptr) < 0) {
             std::cout << "Could not open the audio encoder." << std::endl;
             vDecoderCCtx = nullptr;
@@ -311,27 +310,30 @@ int ScreenRecorder::decoding() {
                                     aDecoderCCtx->sample_rate * 2);
 
     int index = 0;
-    int nframe = 600;
-    i = 0;
+    int nframe = 100;
+    int ai = 0;
+    int vi = 0;
     //loop as long we have a frame to read
-    while (av_read_frame(videoInFormatCtx, inPacket) >= 0) {
-        if(index++ == nframe){
-            break;
-        }
-        if (videoInFormatCtx->streams[inPacket->stream_index]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
-            if (transcodeVideo(&i, sws_ctx)) return -1;
-            av_packet_unref(inPacket);
-        }else if (audioInFormatCtx->streams[inPacket->stream_index]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO){
-               if(transcodeAudio(&i, swr_ctx)) return -1;
-            av_packet_unref(inPacket);
-        }else {
-            std::cout << "ignoring all non video or audio packets" << std::endl;
+    while(index++ < nframe){
+        if(av_read_frame(videoInFormatCtx, inPacket) >= 0) {
+
+            if (videoInFormatCtx->streams[inPacket->stream_index]->codecpar->codec_type == AVMEDIA_TYPE_VIDEO) {
+                if (transcodeVideo(&vi, sws_ctx)) return -1;
+                av_packet_unref(inPacket);
+            }
+
+            if (av_read_frame(audioInFormatCtx, inPacket) >= 0) {
+                if (audioInFormatCtx->streams[inPacket->stream_index]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
+                    if (transcodeAudio(&ai, swr_ctx)) return -1;
+                    av_packet_unref(inPacket);
+                }
+            }
         }
     }
     return 0;
 }
 
-int ScreenRecorder::transcodeVideo(int* indexFrame, SwsContext *pContext) {
+int ScreenRecorder::transcodeVideo(int* index, SwsContext *pContext) {
     /* JUST CHECKING VIDEO! NEED TO MODIFY FOR AUDIO
     if(inPacket->stream_index != inVideoStream->index) continue;
 */
@@ -382,7 +384,7 @@ int ScreenRecorder::transcodeVideo(int* indexFrame, SwsContext *pContext) {
                   convFrame->data, convFrame->linesize);
 
         if (res >= 0) {
-            if (encode(indexFrame, videoIndex, vEncoderCCtx, outVideoStream)) return -1;
+            if (encode(index, videoIndex, vEncoderCCtx, outVideoStream)) return -1;
         }
         av_frame_unref(inFrame);
 
@@ -390,7 +392,7 @@ int ScreenRecorder::transcodeVideo(int* indexFrame, SwsContext *pContext) {
     return 0;
 }
 
-int ScreenRecorder::transcodeAudio(int* indexFrame, SwrContext *pContext) {
+int ScreenRecorder::transcodeAudio(int* index, SwrContext *pContext) {
 
     int res = avcodec_send_packet(aDecoderCCtx, inPacket);
     if(res<0){
@@ -434,7 +436,7 @@ int ScreenRecorder::transcodeAudio(int* indexFrame, SwrContext *pContext) {
         av_freep(&cSamples[0]);
 
         if (res >= 0) {
-            if (encode(indexFrame, audioIndex, aEncoderCCtx, outAudioStream)) return -1;
+            if (encode(index, 1, aEncoderCCtx, outAudioStream)) return -1;
         }
         av_frame_unref(inFrame);
 
@@ -468,9 +470,9 @@ int ScreenRecorder::encode(int* i, int streamIndex, AVCodecContext* cctx, AVStre
         outPacket->stream_index = streamIndex;
 
         outPacket->pts = *i;
-        outPacket->dts = *i-20;
-        outPacket->duration = 60;
-        *i += 60; //inizia da 1 secondo a visualizzare, ma il video , vautare se aggiornarlo dopo
+        outPacket->dts = *i;
+        outPacket->duration = cctx->time_base.den;
+        *i += cctx->time_base.den;
 //        outPacket->duration = outVideoStream->time_base.den / outVideoStream->time_base.num / inVideoStream->avg_frame_rate.num * inVideoStream->avg_frame_rate.den;
         av_packet_rescale_ts(outPacket, cctx->time_base, outStream->time_base);
 
