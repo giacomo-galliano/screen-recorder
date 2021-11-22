@@ -14,7 +14,11 @@ extern "C"
 }
 #include <iostream>
 
+static const int64_t FLICKS_TIMESCALE = 705600000;
+static const ::AVRational FLICKS_TIMESCALE_Q = { 1, FLICKS_TIMESCALE };
+
 class ScreenRecorder {
+
 
     const AVSampleFormat requireAudioFmt = AV_SAMPLE_FMT_FLTP;
 

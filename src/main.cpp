@@ -2,6 +2,8 @@
 #include <iostream>
 #include "ScreenRecorder.h"
 
+
+
 int main(int argc, char **argv) {
 
 ScreenRecorder* sc = new ScreenRecorder;

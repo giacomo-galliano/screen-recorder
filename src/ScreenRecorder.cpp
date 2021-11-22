@@ -39,6 +39,9 @@ int ScreenRecorder::fillStreamInfo() {
         return -2;
     }
 
+    //// BISOGNA SETTARLO???? DI DEFAULT E' 0/1.
+    vDecoderCCtx->time_base = videoInFormatCtx->streams[videoIndex]->time_base; // (AVRational){1, 90000};
+
     if (avcodec_open2(vDecoderCCtx, vDecoderC, nullptr) < 0) {
         std::cout << "failed to open video decoder." << std::endl;
         vDecoderCCtx = nullptr;
@@ -171,16 +174,17 @@ int ScreenRecorder::prepareEncoder() {
         return -1;
     }
 
-    vEncoderCCtx->time_base = (AVRational){1, 25};
+    vEncoderCCtx->time_base = (AVRational){1, 60};
     //vEncoderCCtx->framerate = (AVRational){60, 1};
     vEncoderCCtx->width = vDecoderCCtx->width;
     vEncoderCCtx->height = vDecoderCCtx->height;
     vEncoderCCtx->pix_fmt  = AV_PIX_FMT_YUV420P;
     vEncoderCCtx->codec_id = AV_CODEC_ID_H264;
     vEncoderCCtx->codec_type = AVMEDIA_TYPE_VIDEO;
-    vEncoderCCtx->gop_size = 12;
+    vEncoderCCtx->gop_size = 24;
     vEncoderCCtx->bit_rate = 4000000;
-    vEncoderCCtx->level = 31;
+//    vEncoderCCtx->level = 31;
+    vEncoderCCtx->framerate = av_inv_q(vEncoderCCtx->time_base);
 
     //outVideoStream->time_base = vEncoderCCtx->time_base;
 
@@ -316,8 +320,10 @@ int ScreenRecorder::decoding() {
     audioFifo = av_audio_fifo_alloc(requireAudioFmt, aDecoderCCtx->channels,
                                     aDecoderCCtx->sample_rate * 4);
 
+
+
     int index = 0;
-    int nframe = 100;
+    int nframe = 200;
     int ai = 0;
     int vi = 0;
     //loop as long we have a frame to read
@@ -352,7 +358,7 @@ int ScreenRecorder::transcodeVideo(int* index, SwsContext *pContext) {
 //    vpts++;
 
     av_packet_rescale_ts(inPacket, AV_TIME_BASE_Q, videoInFormatCtx->streams[videoIndex]->time_base);
-
+//    av_packet_rescale_ts(inPacket, videoInFormatCtx->streams[videoIndex]->time_base, FLICKS_TIMESCALE_Q);
 
 
 
@@ -515,8 +521,23 @@ int ScreenRecorder::encode(int* i, int streamIndex, AVCodecContext* cctx, AVStre
 //            outPacket->duration = av_rescale_q(outPacket->duration, videoInFormatCtx->streams[videoIndex]->time_base, outFormatCtx->streams[videoIndex]->time_base);
 //            outPacket->pos = -1;
 
+
+
+
             //la conversione penso sia giusta, ma non partendo da 0 il video non viene visualizzato, come portare gli inPackets->pts a partire da 0?
             av_packet_rescale_ts(outPacket, videoInFormatCtx->streams[videoIndex]->time_base, outFormatCtx->streams[0]->time_base);
+//            av_packet_rescale_ts(outPacket, FLICKS_TIMESCALE_Q, outFormatCtx->streams[0]->time_base);
+            if(vpts == 0){
+                vpts = outPacket->pts;
+                outPacket->pts = 0;
+                outPacket->dts = 0;
+            }else{
+                auto pts = outPacket->pts;
+                outPacket->pts = outPacket->pts - vpts + last_pts;
+                outPacket->dts = last_pts;
+                vpts = pts;
+                last_pts = outPacket->pts;
+            }
 
         }else {
             av_packet_rescale_ts(outPacket, cctx->time_base, outStream->time_base);
