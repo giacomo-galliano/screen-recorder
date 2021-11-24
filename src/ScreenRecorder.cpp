@@ -173,6 +173,8 @@ int ScreenRecorder::prepareEncoder() {
         std::cout << "Couldn't create output video AVStream" << std::endl;
         return -1;
     }
+    av_opt_set(vEncoderCCtx->priv_data, "preset", "fast", 0);
+    av_opt_set(vEncoderCCtx->priv_data, "x264-params","keyint=60:min-keyint=60:scenecut=0:force-cfr=1", 0);
 
     vEncoderCCtx->time_base = (AVRational){1, 60};
     //vEncoderCCtx->framerate = (AVRational){60, 1};
@@ -181,7 +183,7 @@ int ScreenRecorder::prepareEncoder() {
     vEncoderCCtx->pix_fmt  = AV_PIX_FMT_YUV420P;
     vEncoderCCtx->codec_id = AV_CODEC_ID_H264;
     vEncoderCCtx->codec_type = AVMEDIA_TYPE_VIDEO;
-    vEncoderCCtx->gop_size = 24;
+    vEncoderCCtx->gop_size = 12;
     vEncoderCCtx->bit_rate = 4000000;
 //    vEncoderCCtx->level = 31;
     vEncoderCCtx->framerate = av_inv_q(vEncoderCCtx->time_base);
