@@ -15,6 +15,7 @@ extern "C"
 
 #include <iostream>
 #include <memory>
+#include <functional>
 #include "FormatContext.h"
 #include "Packet.h"
 #include "CodecContext.h"
@@ -36,10 +37,15 @@ extern "C"
  * Using function pointer takes one pointer size and std::function takes even more size.
  */
 
+SwsContext* sws_ctx = nullptr;
+SwrContext* swr_ctx = nullptr;
+
 void init();
 int readFrame(AVFormatContext* fmtCtx, AVPacket* pkt);
 int prepareDecoder(FormatContext* fmtCtx, AVMediaType mediaType); //if ret<0 -> failed
-int sendPacket(FormatContext& fmtCtx, const AVPacket* pkt);
+int prepareEncoder(FormatContext* fmtCtx, AVMediaType mediaType);
+int sendPacket(FormatContext& fmtCtx, const AVPacket* pkt, std::function<void(Frame&)>passFrame);
+int sendPacket(FormatContext& fmtCtx, Packet&pkt, std::function<void(Frame&)>pFrame);
 void decode(FormatContext& fmtCtx);
-
+void passFrame(std::unique_ptr<AVFrame>& frame);
 #endif //SCREEN_RECORDER_WRAPPERS_H
