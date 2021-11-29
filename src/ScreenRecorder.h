@@ -32,7 +32,7 @@ class ScreenRecorder {
     AVDictionary *muxerOptions;
 
     int videoIndex, audioIndex;
-    int64_t vpts, apts, vdts, last_pts, last_dts;
+    int64_t vpts, apts, vdts, last_pts, last_apts;
 
     AVStream *outVideoStream, *outAudioStream;
 

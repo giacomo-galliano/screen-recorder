@@ -8,7 +8,7 @@ ScreenRecorder::ScreenRecorder() {
     vdts = 0;
     apts = 0;
     last_pts = 0;
-    last_dts = 0;
+    last_apts = 0;
 
     outFilename = "../media/output.mp4";
     muxerOptions = nullptr;
@@ -121,10 +121,13 @@ int ScreenRecorder::openInput() {
     vIft = av_find_input_format("x11grab");
     aIft = av_find_input_format("pulse");
     AVDictionary* options = NULL;
-//    av_dict_set(&options,"framerate","10000",0);
+//    av_dict_set(&options,"framerate","60",0);
 //    av_dict_set(&options,"video_size","wxga",0);
-//    av_dict_set(&options, "crf", "12", 0);
-    videoInFormatCtx->probesize = 40000000;
+//    av_dict_set(&options, "select_region", "1", 0);
+    av_dict_set(&options, "follow_mouse", "centered", 0);
+//    av_dict_set(&options, "draw_mouse", "1", 0);
+    av_dict_set(&options, "show_region", "1", 0);
+//    videoInFormatCtx->probesize = 40000000;
 
     if (avformat_open_input(&videoInFormatCtx, ":0.0", vIft, &options) != 0) {
         std::cout << "Couldn't open the video file" << std::endl;
@@ -174,7 +177,7 @@ int ScreenRecorder::prepareEncoder() {
         return -1;
     }
     av_opt_set(vEncoderCCtx->priv_data, "preset", "fast", 0);
-    av_opt_set(vEncoderCCtx->priv_data, "x264-params","keyint=60:min-keyint=60:scenecut=0:force-cfr=1", 0);
+    av_opt_set(vEncoderCCtx->priv_data, "x264-params","keyint=250:min-keyint=60:level=4.1:fps=60:crf=1", 0);
 
     vEncoderCCtx->time_base = (AVRational){1, 60};
     //vEncoderCCtx->framerate = (AVRational){60, 1};
@@ -183,8 +186,8 @@ int ScreenRecorder::prepareEncoder() {
     vEncoderCCtx->pix_fmt  = AV_PIX_FMT_YUV420P;
     vEncoderCCtx->codec_id = AV_CODEC_ID_H264;
     vEncoderCCtx->codec_type = AVMEDIA_TYPE_VIDEO;
-    vEncoderCCtx->gop_size = 12;
-    vEncoderCCtx->bit_rate = 4000000;
+//    vEncoderCCtx->gop_size = 1;
+//    vEncoderCCtx->bit_rate = 4000;
 //    vEncoderCCtx->level = 31;
     vEncoderCCtx->framerate = av_inv_q(vEncoderCCtx->time_base);
 
@@ -220,17 +223,17 @@ int ScreenRecorder::prepareEncoder() {
         aEncoderCCtx->channels = audioInFormatCtx->streams[audioIndex]->codecpar->channels;
         aEncoderCCtx->channel_layout = av_get_default_channel_layout(audioInFormatCtx->streams[audioIndex]->codecpar->channels);
         aEncoderCCtx->sample_rate = audioInFormatCtx->streams[audioIndex]->codecpar->sample_rate;
-        aEncoderCCtx->sample_fmt = aEncoderC->sample_fmts[0];  //for aac , there is AV_SAMPLE_FMT_FLTP =8
-        aEncoderCCtx->bit_rate = 32000;
+        aEncoderCCtx->sample_fmt = aEncoderC->sample_fmts[0];  //for aac , there is AV_SAMPLE_FMT_FLTP = 8
+        aEncoderCCtx->bit_rate = 128000;
         aEncoderCCtx->time_base.num = 1;
         aEncoderCCtx->time_base.den = aEncoderCCtx->sample_rate;
 
-        outAudioStream->time_base = aEncoderCCtx->time_base;
+//        outAudioStream->time_base = aEncoderCCtx->time_base;
 
         if (avcodec_open2(aEncoderCCtx, aEncoderC, nullptr) < 0) {
             std::cout << "Could not open the audio encoder." << std::endl;
             vDecoderCCtx = nullptr;
-            return -5;
+            return -1;
         }
     }
 
@@ -337,7 +340,7 @@ int ScreenRecorder::decoding() {
                 av_packet_unref(inPacket);
             }
 
-            if (av_read_frame(audioInFormatCtx, inPacket) >= 0 && false) {
+            if (av_read_frame(audioInFormatCtx, inPacket) >= 0) {
                 if (audioInFormatCtx->streams[inPacket->stream_index]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) {
                     if (transcodeAudio(&ai, swr_ctx)) return -1;
                     av_packet_unref(inPacket);
@@ -405,12 +408,14 @@ int ScreenRecorder::transcodeVideo(int* index, SwsContext *pContext) {
 //        convFrame->pkt_pos = inFrame->pkt_pos;
 //        convFrame->pkt_size = inFrame->pkt_size;
 
-        av_frame_copy_props(convFrame, inFrame);
+//        av_frame_copy_props(convFrame, inFrame);
 
 
         sws_scale(pContext, (uint8_t const *const *) inFrame->data,
                   inFrame->linesize, 0, vDecoderCCtx->height,
                   convFrame->data, convFrame->linesize);
+
+        convFrame->pts = vpts * outVideoStream->time_base.den * 16 / vEncoderCCtx->time_base.den;
 
         if (res >= 0) {
             if (encode(index, videoIndex, vEncoderCCtx, outVideoStream)) return -1;
@@ -424,16 +429,13 @@ int ScreenRecorder::transcodeVideo(int* index, SwsContext *pContext) {
 int ScreenRecorder::transcodeAudio(int* index, SwrContext *pContext) {
 
     int res = avcodec_send_packet(aDecoderCCtx, inPacket);
-    if(res<0){
-        std::cout << "An error happened during the decoding phase" <<std::endl;
-        return res;
-    }
+        if(res<0){
+            std::cout << "An error happened during the decoding phase" <<std::endl;
+            return res;
+        }
 
-    while (res >= 0) {
         res = avcodec_receive_frame(aDecoderCCtx, inFrame);
-        if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) {
-            break;
-        } else if (res < 0 ){
+        if (res < 0 ){
             std::cout << "Error during encoding" << std::endl;
             return res;
         }
@@ -458,6 +460,7 @@ int ScreenRecorder::transcodeAudio(int* index, SwrContext *pContext) {
 
         av_freep(&cSamples[0]);
 
+
         while (av_audio_fifo_size(audioFifo) >= aEncoderCCtx->frame_size) {
             convFrame = av_frame_alloc();
             if (!convFrame) {
@@ -470,18 +473,19 @@ int ScreenRecorder::transcodeAudio(int* index, SwrContext *pContext) {
             convFrame->format = requireAudioFmt;
             convFrame->sample_rate = aEncoderCCtx->sample_rate;
 
+
             res = av_frame_get_buffer(convFrame, 0);
             res = av_audio_fifo_read(audioFifo, (void**)convFrame->data, aEncoderCCtx->frame_size);
 
-            convFrame->pts = apts++;
+            convFrame->pts = apts * outAudioStream->time_base.den * 1024 / aEncoderCCtx->sample_rate; //inFrame->pts;
+
             if (res >= 0) {
                 if (encode(index, 1, aEncoderCCtx, outAudioStream)) return -1;
             }
         }
-
         av_frame_unref(inFrame);
+        av_packet_unref(inPacket);
 
-    }
     return 0;
 
 }
@@ -527,22 +531,32 @@ int ScreenRecorder::encode(int* i, int streamIndex, AVCodecContext* cctx, AVStre
 
 
             //la conversione penso sia giusta, ma non partendo da 0 il video non viene visualizzato, come portare gli inPackets->pts a partire da 0?
-            av_packet_rescale_ts(outPacket, videoInFormatCtx->streams[videoIndex]->time_base, outFormatCtx->streams[0]->time_base);
-//            av_packet_rescale_ts(outPacket, FLICKS_TIMESCALE_Q, outFormatCtx->streams[0]->time_base);
-            if(vpts == 0){
-                vpts = outPacket->pts;
-                outPacket->pts = 0;
-                outPacket->dts = 0;
-            }else{
-                auto pts = outPacket->pts;
-                outPacket->pts = outPacket->pts - vpts + last_pts;
-                outPacket->dts = last_pts;
-                vpts = pts;
-                last_pts = outPacket->pts;
-            }
+//            av_packet_rescale_ts(outPacket, videoInFormatCtx->streams[videoIndex]->time_base, outFormatCtx->streams[0]->time_base);
+////            av_packet_rescale_ts(outPacket, FLICKS_TIMESCALE_Q, outFormatCtx->streams[0]->time_base);
+//            if(vpts == 0){
+//                vpts = outPacket->pts;
+//                outPacket->pts = 0;
+//                outPacket->dts = 0;
+//            }else{
+//                auto pts = outPacket->pts;
+//                outPacket->pts = outPacket->pts - vpts + last_pts;
+//                outPacket->dts = last_pts;
+//                vpts = pts;
+//                last_pts = outPacket->pts;
+//            }
+
+            outPacket->duration = outVideoStream->time_base.den * 16 / vEncoderCCtx->time_base.den;
+            outPacket->dts = outPacket->pts = vpts * outVideoStream->time_base.den * 16 / vEncoderCCtx->time_base.den;
+            vpts++;
+            if(vEncoderCCtx->coded_frame->key_frame)
+                outPacket->flags |= AV_PKT_FLAG_KEY;
+
 
         }else {
-            av_packet_rescale_ts(outPacket, cctx->time_base, outStream->time_base);
+            outPacket->duration = outAudioStream->time_base.den * 1024 / aEncoderCCtx->sample_rate;
+            outPacket->dts = outPacket->pts =apts * outAudioStream->time_base.den * 1024 / aEncoderCCtx->sample_rate;
+            apts++;
+
         }
 
 
@@ -569,9 +583,6 @@ int ScreenRecorder::encode(int* i, int streamIndex, AVCodecContext* cctx, AVStre
 */
 //        outPacket->dts = av_rescale_q(outPacket->dts, vEncoderCCtx->time_base, vDecoderCCtx->time_base);
 
-
-        if(vEncoderCCtx->coded_frame->key_frame)
-        outPacket->flags |= AV_PKT_FLAG_KEY;
         std::cout << "before write frame: " << outPacket->pts << " " << outPacket->dts << " duration " << outPacket->duration << " streamindex: " << streamIndex <<res << std::endl;
 
     res = av_interleaved_write_frame(outFormatCtx, outPacket);
@@ -579,6 +590,9 @@ int ScreenRecorder::encode(int* i, int streamIndex, AVCodecContext* cctx, AVStre
         std::cout << "Error while writing video frame, error: " << res << std::endl;
         return -1;
     }
+
+    if(streamIndex == 1)
+        break;
 
     }
     av_packet_unref(outPacket);
