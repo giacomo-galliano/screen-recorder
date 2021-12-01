@@ -124,7 +124,7 @@ int ScreenRecorder::openInput() {
 //    av_dict_set(&options,"framerate","60",0);
 //    av_dict_set(&options,"video_size","wxga",0);
 //    av_dict_set(&options, "select_region", "1", 0);
-    av_dict_set(&options, "follow_mouse", "centered", 0);
+//    av_dict_set(&options, "follow_mouse", "centered", 0);
 //    av_dict_set(&options, "draw_mouse", "1", 0);
     av_dict_set(&options, "show_region", "1", 0);
 //    videoInFormatCtx->probesize = 40000000;
