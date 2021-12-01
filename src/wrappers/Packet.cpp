@@ -6,12 +6,14 @@ Packet::Packet(AVFormatContext *fmtCtx) : PacketBase(av_packet_alloc(), [](AVPac
 {
     av_packet_free(&pkt);
 }), fmtCtx(fmtCtx){
-    readFrame(fmtCtx, get()); //get() returns the stored pointer of the unique_ptr
+    //readFrame(fmtCtx, get()); //get() returns the stored pointer of the unique_ptr
 };
+
 /*
  * Prefix increment
  * @return
  */
+/*
 Packet& Packet::operator++(){
     if (!(*this)) {return *this;}
 
@@ -24,3 +26,4 @@ Packet& Packet::operator++(){
 
     return *this;
 }
+*/

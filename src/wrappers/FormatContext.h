@@ -1,8 +1,13 @@
 #ifndef SCREEN_RECORDER_FORMATCONTEXT_H
 #define SCREEN_RECORDER_FORMATCONTEXT_H
 
-#include "wrappers.h"
+#include <iostream>
+#include <memory>
 #include <map>
+
+#include "com.h"
+#include "Packet.h"
+#include "CodecContext.h"
 
 using FormatContextBase = std::unique_ptr<AVFormatContext, void(*)(AVFormatContext*)>;
 class FormatContext : public FormatContextBase {

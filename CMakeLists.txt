@@ -7,9 +7,13 @@ include_directories(include)
 
 add_executable(
         screen-recorder src/main.cpp
-        src/VideoRecorder.cpp src/VideoRecorder.h src/AudioRecorder.cpp src/AudioRecorder.h src/Orchestrator.cpp src/Orchestrator.h
-        src/wrappers/FormatContext.cpp src/wrappers/FormatContext.h src/wrappers/Packet.cpp src/wrappers/Packet.h
-        src/wrappers/wrappers.cpp src/wrappers/wrappers.h src/wrappers/Dictionary.cpp src/wrappers/Dictionary.h src/wrappers/Frame.h src/wrappers/CodecContext.h src/wrappers/CodecContext.cpp)
+        src/wrappers/com.h
+        src/wrappers/FormatContext.cpp src/wrappers/FormatContext.h
+        src/wrappers/Packet.cpp src/wrappers/Packet.h
+        src/wrappers/wrappers.cpp src/wrappers/wrappers.h
+        src/wrappers/Frame.cpp src/wrappers/Frame.h
+        src/wrappers/CodecContext.cpp src/wrappers/CodecContext.h
+        )
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
@@ -19,6 +23,7 @@ pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
         libavformat
         libavutil
         libswscale
+        libswresample
         )
 
 target_link_libraries(${PROJECT_NAME}

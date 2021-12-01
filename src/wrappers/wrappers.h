@@ -1,21 +1,12 @@
 #ifndef SCREEN_RECORDER_WRAPPERS_H
 #define SCREEN_RECORDER_WRAPPERS_H
 
-extern "C"
-{
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libswscale/swscale.h>
-#include <libswresample/swresample.h>
-#include <libavdevice/avdevice.h>
-#include <inttypes.h>
-#include <libavutil/imgutils.h>
-#include <libavutil/audio_fifo.h>
-}
-
 #include <iostream>
 #include <memory>
 #include <functional>
+#include <map>
+
+#include "com.h"
 #include "FormatContext.h"
 #include "Packet.h"
 #include "CodecContext.h"
@@ -37,15 +28,25 @@ extern "C"
  * Using function pointer takes one pointer size and std::function takes even more size.
  */
 
-SwsContext* sws_ctx = nullptr;
-SwrContext* swr_ctx = nullptr;
+//////////////////////////////////////////////////////// IN common.h
+const AVSampleFormat requireAudioFmt = AV_SAMPLE_FMT_FLTP;
+inline AVAudioFifo* audioFifo;
+////////////////////////////////////////////////////////
+inline SwsContext* sws_ctx = nullptr;
+inline SwrContext* swr_ctx = nullptr;
 
 void init();
 int readFrame(AVFormatContext* fmtCtx, AVPacket* pkt);
-int prepareDecoder(FormatContext* fmtCtx, AVMediaType mediaType); //if ret<0 -> failed
-int prepareEncoder(FormatContext* fmtCtx, AVMediaType mediaType);
-int sendPacket(FormatContext& fmtCtx, const AVPacket* pkt, std::function<void(Frame&)>passFrame);
-int sendPacket(FormatContext& fmtCtx, Packet&pkt, std::function<void(Frame&)>pFrame);
-void decode(FormatContext& fmtCtx);
-void passFrame(std::unique_ptr<AVFrame>& frame);
+int writeHeader(FormatContext& fmtCtx);
+int writeTrailer(FormatContext& fmtCtx);
+int writeFrame(FormatContext& fmtCtx, const Packet& pkt, AVMediaType mediaType);
+int prepareDecoder(FormatContext& fmtCtx, AVMediaType mediaType); //if ret<0 -> failed
+int prepareEncoder(FormatContext* inFmtCtx, FormatContext* outFmtCtx, AVMediaType mediaType);
+int sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx, const AVPacket* pkt);
+int sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx, Packet&pkt);
+void decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, const AVMediaType& mediaType);
+void passFrame(Frame& frame, FormatContext& inCtx, FormatContext& outFmtCtx, const AVMediaType& mediaType);
+void encode(FormatContext& outFmtCtx, Frame& frame, const AVMediaType& mediaType);
+void generateOutStreams(FormatContext& outFmtCtx, const AVCodecParameters* par, const AVMediaType& mediaType);
+
 #endif //SCREEN_RECORDER_WRAPPERS_H

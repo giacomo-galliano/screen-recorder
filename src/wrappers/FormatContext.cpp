@@ -6,6 +6,7 @@ FormatContext openInput(const std::string& url, const std::string& ift_short_nam
     AVFormatContext* inFmtCtx = nullptr;
     //inserire variabile a seconda dell'ambiente di esecuzione
     AVInputFormat* ift = av_find_input_format(ift_short_name.c_str());
+
     if(!ift){
         std::cout << "Unable to find input format: " << ift_short_name << std::endl;
         return FormatContext();
@@ -20,6 +21,7 @@ FormatContext openInput(const std::string& url, const std::string& ift_short_nam
         avformat_close_input(&inFmtCtx);
         return FormatContext();
     }
+
 
     return FormatContext(inFmtCtx, [](AVFormatContext* inCtx){
         /*

@@ -1,7 +1,9 @@
 #ifndef SCREEN_RECORDER_PACKET_H
 #define SCREEN_RECORDER_PACKET_H
 
-#include "wrappers.h"
+#include <memory>
+
+#include "com.h"
 
 /*
  * AVPacket is extended to enable ranged for loop.
@@ -16,7 +18,7 @@ private:
 public:
     Packet();
     Packet(AVFormatContext *fmtCtx);
-    Packet& operator++();
+    //Packet& operator++();
 };
 
 
