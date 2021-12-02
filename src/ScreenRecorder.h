@@ -13,11 +13,15 @@ extern "C"
 #include <libavutil/audio_fifo.h>
 }
 #include <iostream>
+#include <thread>
+#include <mutex>
 
 static const int64_t FLICKS_TIMESCALE = 705600000;
 static const ::AVRational FLICKS_TIMESCALE_Q = { 1, FLICKS_TIMESCALE };
 
 class ScreenRecorder {
+
+    std::mutex mutexWriteFrame;
 
 
     const AVSampleFormat requireAudioFmt = AV_SAMPLE_FMT_FLTP;
@@ -41,13 +45,13 @@ class ScreenRecorder {
 
     AVAudioFifo *audioFifo;
 
-    AVPacket *inPacket, *outPacket;
-    AVFrame *inFrame, *convFrame;
+    AVPacket *inVideoPacket, *inAudioPacket, *outPacket;
+    AVFrame *inVideoFrame, *inAudioFrame, *convAudioFrame, *convVideoFrame;
 
     int fillStreamInfo();
-    int transcodeVideo(int* index, SwsContext *pContext);
-    int transcodeAudio(int* indexFrame, SwrContext *pContext);
-    int encode(int* i, int streamIndex, AVCodecContext* cctx, AVStream* outStream);
+    int transcodeVideo(SwsContext *pContext);
+    int transcodeAudio(SwrContext *pContext);
+    int encode(int streamIndex, AVCodecContext* cctx, AVStream* outStream, AVFrame * convframe);
     void flushAll();
 
 public:
