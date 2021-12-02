@@ -97,15 +97,15 @@ int prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFmtCtx, AVMediaTyp
     });
 
     if(mediaType == AVMEDIA_TYPE_VIDEO){
-        cCtx->width = inFmtCtx.open_streams.find(0)->second.get()->width;
-        cCtx->height = inFmtCtx.open_streams.find(0)->second.get()->height;
+        cCtx->width = inFmtCtx.open_streams.find(in_v_index)->second.get()->width;
+        cCtx->height = inFmtCtx.open_streams.find(in_v_index)->second.get()->height;
         cCtx->pix_fmt = AV_PIX_FMT_YUV420P;
         cCtx->time_base = (AVRational){1,60};
         cCtx->framerate = av_inv_q(cCtx->time_base);
     }else if(mediaType == AVMEDIA_TYPE_AUDIO) {
-        cCtx->channels = inFmtCtx.open_streams.find(0)->second.get()->channels;
-        cCtx->channel_layout = av_get_default_channel_layout(inFmtCtx.open_streams.find(0)->second.get()->channels);
-        cCtx->sample_rate = inFmtCtx.open_streams.find(0)->second.get()->sample_rate;
+        cCtx->channels = inFmtCtx.open_streams.find(in_a_index)->second.get()->channels;
+        cCtx->channel_layout = av_get_default_channel_layout(inFmtCtx.open_streams.find(in_a_index)->second.get()->channels);
+        cCtx->sample_rate = inFmtCtx.open_streams.find(in_a_index)->second.get()->sample_rate;
         cCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
         cCtx->bit_rate = 32000;
         cCtx->time_base.num = 1;
@@ -120,9 +120,9 @@ int prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFmtCtx, AVMediaTyp
     }
 
     if(mediaType == AVMEDIA_TYPE_VIDEO){
-        outFmtCtx.open_streams.emplace(0, std::move(cCtx));
+        outFmtCtx.open_streams.emplace(OUT_VIDEO_INDEX, std::move(cCtx));
     }else if(mediaType == AVMEDIA_TYPE_AUDIO) {
-        outFmtCtx.open_streams.emplace(1, std::move(cCtx));
+        outFmtCtx.open_streams.emplace(OUT_AUDIO_INDEX, std::move(cCtx));
     }
 
     return 0;
@@ -168,10 +168,6 @@ int sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx, const AVPacket
     return err == AVERROR(EAGAIN) ? 0 : err;
 };
 
-int sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx, Packet&pkt){
-  return sendPacket(inFmtCtx, outFmtCtx, pkt.get());
-};
-
 void passFrame(Frame& frame, FormatContext& inCtx, FormatContext& outFmtCtx, const AVMediaType& mediaType){
     Frame convFrame =  Frame(av_frame_alloc(), [](AVFrame* frame) {
         av_frame_free(&frame);
@@ -180,18 +176,21 @@ void passFrame(Frame& frame, FormatContext& inCtx, FormatContext& outFmtCtx, con
     if(mediaType == AVMEDIA_TYPE_VIDEO) {
         sws_ctx = sws_getContext(
                 frame->width, frame->height, (AVPixelFormat) frame->format,
-                outFmtCtx.open_streams.find(0)->second.get()->width, outFmtCtx.open_streams.find(0)->second.get()->height, outFmtCtx.open_streams.find(0)->second.get()->pix_fmt,
+                outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->width, outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->height,
+                outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->pix_fmt,
                 SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
 
 
         uint8_t *buffer = (uint8_t *) av_malloc(
-                av_image_get_buffer_size(outFmtCtx.open_streams.find(0)->second.get()->pix_fmt, outFmtCtx.open_streams.find(0)->second.get()->width,
-                                         outFmtCtx.open_streams.find(0)->second.get()->height,1));
+                av_image_get_buffer_size(outFmtCtx.open_streams.find(in_v_index)->second.get()->pix_fmt, outFmtCtx.open_streams.find(in_v_index)->second.get()->width,
+                                         outFmtCtx.open_streams.find(in_v_index)->second.get()->height,1));
         if (buffer == NULL) {
             std::cerr << "Unable to allocate memory for the buffer" << std::endl;
         }
-        if((av_image_fill_arrays(convFrame->data, convFrame->linesize, buffer, outFmtCtx.open_streams.find(0)->second.get()->pix_fmt,
-                                 outFmtCtx.open_streams.find(0)->second.get()->width, outFmtCtx.open_streams.find(0)->second.get()->height, 1)) <0){
+        if((av_image_fill_arrays(convFrame->data, convFrame->linesize,
+                                 buffer, outFmtCtx.open_streams.find(in_v_index)->second.get()->pix_fmt,
+                                 outFmtCtx.open_streams.find(in_v_index)->second.get()->width,
+                                 outFmtCtx.open_streams.find(in_v_index)->second.get()->height, 1)) <0){
             std::cerr << "An error occured while filling the image array" << std::endl;
         };
 
@@ -211,12 +210,12 @@ void passFrame(Frame& frame, FormatContext& inCtx, FormatContext& outFmtCtx, con
 
     if(mediaType == AVMEDIA_TYPE_AUDIO) {
         swr_ctx = swr_alloc_set_opts(nullptr,
-                                     av_get_default_channel_layout(inCtx.open_streams.find(0)->second.get()->channels),
+                                     av_get_default_channel_layout(inCtx.open_streams.find(in_a_index)->second.get()->channels),
                                      requireAudioFmt,  // aac encoder only receive this format
-                                     inCtx.open_streams.find(0)->second.get()->sample_rate,
-                                     av_get_default_channel_layout(inCtx.open_streams.find(0)->second.get()->channels),
-                                     (AVSampleFormat)inCtx->streams[0]->codecpar->format,
-                                     inCtx->streams[0]->codecpar->sample_rate,
+                                     inCtx.open_streams.find(in_a_index)->second.get()->sample_rate,
+                                     av_get_default_channel_layout(inCtx.open_streams.find(in_a_index)->second.get()->channels),
+                                     (AVSampleFormat)inCtx->streams[in_a_index]->codecpar->format,
+                                     inCtx->streams[in_a_index]->codecpar->sample_rate,
                                      0, nullptr);
 
 
@@ -240,15 +239,15 @@ void passFrame(Frame& frame, FormatContext& inCtx, FormatContext& outFmtCtx, con
 
         av_freep(&cSamples[0]);
 
-        while (av_audio_fifo_size(audioFifo) >= outFmtCtx.open_streams.find(1)->second.get()->frame_size) {
-            convFrame->nb_samples = outFmtCtx.open_streams.find(1)->second.get()->frame_size;
-            convFrame->channels = inCtx.open_streams.find(0)->second.get()->channels;
-            convFrame->channel_layout = av_get_default_channel_layout(inCtx.open_streams.find(0)->second.get()->channels);
+        while (av_audio_fifo_size(audioFifo) >= outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size) {
+            convFrame->nb_samples = outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size;
+            convFrame->channels = inCtx.open_streams.find(in_a_index)->second.get()->channels;
+            convFrame->channel_layout = av_get_default_channel_layout(inCtx.open_streams.find(in_a_index)->second.get()->channels);
             convFrame->format = requireAudioFmt;
-            convFrame->sample_rate = outFmtCtx.open_streams.find(1)->second.get()->sample_rate;
+            convFrame->sample_rate = outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->sample_rate;
 
             res = av_frame_get_buffer(convFrame.get(), 0);
-            res = av_audio_fifo_read(audioFifo, (void**)convFrame->data, outFmtCtx.open_streams.find(1)->second.get()->frame_size);
+            res = av_audio_fifo_read(audioFifo, (void**)convFrame->data, outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size);
 
             // convFrame->pts = apts++;
             encode(outFmtCtx, convFrame, mediaType);
@@ -263,23 +262,23 @@ void encode(FormatContext& outFmtCtx, Frame& frame, const AVMediaType& mediaType
     Packet pkt = Packet(outFmtCtx.get());
 
     if(mediaType == AVMEDIA_TYPE_VIDEO){
-        res = avcodec_send_frame(outFmtCtx.open_streams.find(0)->second.get(), frame.get());  //outFmtCtx.open_streams.find(0)->second.get().get()
+        res = avcodec_send_frame(outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get(), frame.get());  //outFmtCtx.open_streams.find(0)->second.get().get()
         if(res < 0){
             std::cerr << "Error sending the frame for encoding, media type " << mediaType << std::endl;
         }
         while (res >= 0){
-            res = avcodec_receive_packet(outFmtCtx.open_streams.find(0)->second.get(), pkt.get()); // outFmtCtx.open_streams.find(0)->second.get().get()
-            pkt->stream_index = 0;
+            res = avcodec_receive_packet(outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get(), pkt.get()); // outFmtCtx.open_streams.find(0)->second.get().get()
+            pkt->stream_index = OUT_VIDEO_INDEX;
             writeFrame(outFmtCtx, pkt, mediaType);
         }
     }else if(mediaType == AVMEDIA_TYPE_AUDIO){
-        res = avcodec_send_frame(outFmtCtx.open_streams.find(1)->second.get(), frame.get());  //outFmtCtx.open_streams.find(0)->second.get().get()
+        res = avcodec_send_frame(outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get(), frame.get());  //outFmtCtx.open_streams.find(0)->second.get().get()
         if(res < 0){
             std::cerr << "Error sending the frame for encoding, media type " << mediaType << std::endl;
         }
         while (res >= 0){
-            res = avcodec_receive_packet(outFmtCtx.open_streams.find(1)->second.get(), pkt.get()); // outFmtCtx.open_streams.find(0)->second.get().get()
-            pkt->stream_index = 0;
+            res = avcodec_receive_packet(outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get(), pkt.get()); // outFmtCtx.open_streams.find(0)->second.get().get()
+            pkt->stream_index = OUT_AUDIO_INDEX;
             writeFrame(outFmtCtx, pkt, mediaType);
         }
     }

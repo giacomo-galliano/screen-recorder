@@ -1,9 +1,19 @@
 #include <stdio.h>
 #include <iostream>
 
+#include "ScreenRecorder.h"
 #include "wrappers/wrappers.h"
 
 int main(int argc, char **argv) {
+
+    /*
+    ScreenRecorder* sr;
+    try{
+        SettingsConf sc;
+        Command cmd = sc.options_menu();
+        sr.start(cmd);
+    }
+    */
     init();
     FormatContext v_inFmtCtx = openInput(":0.0", "x11grab", nullptr);
     FormatContext a_inFmtCtx = openInput("default", "pulse", nullptr);
