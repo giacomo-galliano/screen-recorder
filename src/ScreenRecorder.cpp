@@ -179,7 +179,7 @@ int ScreenRecorder::prepareEncoder() {
     av_opt_set(vEncoderCCtx->priv_data, "preset", "fast", 0);
     av_opt_set(vEncoderCCtx->priv_data, "x264-params","keyint=250:min-keyint=60:level=4.1:fps=60:crf=1", 0);
 
-    vEncoderCCtx->time_base = (AVRational){1, 60};
+    vEncoderCCtx->time_base = (AVRational){1, 30};
     //vEncoderCCtx->framerate = (AVRational){60, 1};
     vEncoderCCtx->width = vDecoderCCtx->width;
     vEncoderCCtx->height = vDecoderCCtx->height;
@@ -317,19 +317,20 @@ int ScreenRecorder::decoding() {
 
 
 //    transcodeVideo(sws_ctx);
-    transcodeAudio(swr_ctx);
+//    transcodeAudio(swr_ctx);
     //START THREADS
-//    std::thread threadVideo(&ScreenRecorder::transcodeVideo, this, sws_ctx);
-//
-//    std::thread threadAudio(&ScreenRecorder::transcodeAudio, this, swr_ctx);
-//
+    std::thread threadVideo(&ScreenRecorder::transcodeVideo, this, sws_ctx);
+
+    std::thread threadAudio(&ScreenRecorder::transcodeAudio, this, swr_ctx);
+    threadVideo.join();
+    threadAudio.join();
 //    std::this_thread::sleep_for(std::chrono::seconds(20));
 
     return 0;
 }
 
 int ScreenRecorder::transcodeVideo(SwsContext *pContext) {
-
+int i = 0;
     inVideoFrame = av_frame_alloc();
     if (!inVideoFrame) {
         std::cout << "Couldn't allocate AVFrame" << std::endl;
@@ -342,7 +343,7 @@ int ScreenRecorder::transcodeVideo(SwsContext *pContext) {
         return -1;
     }
 
-    while (av_read_frame(videoInFormatCtx, inVideoPacket) >= 0) {
+    while (av_read_frame(videoInFormatCtx, inVideoPacket) >= 0 && i++<1000) {
 
 
     int res = avcodec_send_packet(vDecoderCCtx, inVideoPacket);
@@ -382,34 +383,63 @@ int ScreenRecorder::transcodeVideo(SwsContext *pContext) {
         convVideoFrame->width = vEncoderCCtx->width;
         convVideoFrame->height = vEncoderCCtx->height;
         convVideoFrame->format = vEncoderCCtx->pix_fmt;
-//        convVideoFrame->pts = inVideoFrame->pts;
-//        convVideoFrame->pkt_dts = inVideoFrame->pkt_dts;
-//        convVideoFrame->pkt_duration = inVideoFrame->pkt_duration;
-//        convVideoFrame->pkt_pos = inVideoFrame->pkt_pos;
-//        convVideoFrame->pkt_size = inVideoFrame->pkt_size;
-
-//        av_frame_copy_props(convVideoFrame, inVideoFrame);
-
 
         sws_scale(pContext, (uint8_t const *const *) inVideoFrame->data,
                   inVideoFrame->linesize, 0, vDecoderCCtx->height,
                   convVideoFrame->data, convVideoFrame->linesize);
 
-        convVideoFrame->pts = vpts * outVideoStream->time_base.den * 16 / vEncoderCCtx->time_base.den;
+        convVideoFrame->pts = vpts * outVideoStream->time_base.den * 1 / vEncoderCCtx->time_base.den;
 
         if (res >= 0) {
-            if (encode(0, vEncoderCCtx, outVideoStream, convVideoFrame)) return -1;
+            outVideoPacket = av_packet_alloc();
+            if (!outVideoPacket) {
+                std::cout << "could not allocate memory for output packet" << std::endl;
+                return -1;
+            }
+            int  res = avcodec_send_frame(vEncoderCCtx, convVideoFrame);
+            if (res < 0) {
+                std::cout << "Error sending a frame for encoding" << std::endl;
+                return -1;
+            }
+
+            while (res >= 0) {
+                res = avcodec_receive_packet(vEncoderCCtx, outVideoPacket);
+                if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) {
+                    break;
+                } else if (res < 0) {
+                    std::cout << "Error during encoding" << std::endl;
+                    return -1;
+                }
+
+                outVideoPacket->stream_index = 0;
+                outVideoPacket->duration = outVideoStream->time_base.den * 1 / vEncoderCCtx->time_base.den;
+                outVideoPacket->dts = outVideoPacket->pts = vpts * outVideoStream->time_base.den * 1 / vEncoderCCtx->time_base.den;
+                vpts++;
+                if(vEncoderCCtx->coded_frame->key_frame)
+                    outVideoPacket->flags |= AV_PKT_FLAG_KEY;
+
+                std::cout << "before write frame: " << outVideoPacket->pts << " " << outVideoPacket->dts << " duration " << outVideoPacket->duration << " streamindex: " << outVideoPacket->stream_index << std::endl;
+
+//                std::lock_guard<std::mutex> l(mutexWriteFrame);
+                res = av_interleaved_write_frame(outFormatCtx, outVideoPacket);
+
+                if (res != 0) {
+                    std::cout << "Error while writing video frame, error: " << res << std::endl;
+                    return -1;
+                }
+            }
+            av_packet_unref(outVideoPacket);
+            av_packet_free(&outVideoPacket);
         }
         av_frame_unref(inVideoFrame);
     }
-
         av_packet_unref(inVideoPacket);
 }
     return 0;
 }
 
 int ScreenRecorder::transcodeAudio(SwrContext *pContext) {
-
+int i = 0;
     inAudioFrame = av_frame_alloc();
     if (!inAudioFrame) {
         std::cout << "Couldn't allocate AVFrame" << std::endl;
@@ -422,7 +452,7 @@ int ScreenRecorder::transcodeAudio(SwrContext *pContext) {
         return -1;
     }
 
-    while (av_read_frame(audioInFormatCtx, inAudioPacket) >= 0) {
+    while (av_read_frame(audioInFormatCtx, inAudioPacket) >= 0 && i++<2000) {
 
 
     int res = avcodec_send_packet(aDecoderCCtx, inAudioPacket);
@@ -457,7 +487,6 @@ int ScreenRecorder::transcodeAudio(SwrContext *pContext) {
 
         av_freep(&cSamples[0]);
 
-
         while (av_audio_fifo_size(audioFifo) >= aEncoderCCtx->frame_size) {
             convAudioFrame = av_frame_alloc();
             if (!convAudioFrame) {
@@ -476,9 +505,40 @@ int ScreenRecorder::transcodeAudio(SwrContext *pContext) {
 
             convAudioFrame->pts = apts * outAudioStream->time_base.den * 1024 / aEncoderCCtx->sample_rate; //inAudioFrame->pts;
 
-            if (res >= 0) {
-                if (encode(1, aEncoderCCtx, outAudioStream, convAudioFrame)) return -1;
+            outAudioPacket = av_packet_alloc();
+            if (!outAudioPacket) {
+                std::cout << "could not allocate memory for output packet" << std::endl;
+                return -1;
             }
+            int  res = avcodec_send_frame(aEncoderCCtx, convAudioFrame);
+            if (res < 0) {
+                std::cout << "Error sending a frame for encoding" << std::endl;
+                return -1;
+            }
+
+                res = avcodec_receive_packet(aEncoderCCtx, outAudioPacket);
+                if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) {
+                    break;
+                } else if (res < 0) {
+                    std::cout << "Error during encoding" << std::endl;
+                    return -1;
+                }
+
+                outAudioPacket->stream_index = 1;
+                outAudioPacket->duration = outAudioStream->time_base.den * 1024 / aEncoderCCtx->sample_rate;
+                outAudioPacket->dts = outAudioPacket->pts = apts * outAudioStream->time_base.den * 1024 / aEncoderCCtx->sample_rate;
+                apts++;
+
+                std::cout << "before write frame: " << outAudioPacket->pts << " " << outAudioPacket->dts << " duration " << outAudioPacket->duration << " streamindex: " << 1 << std::endl;
+
+//                std::lock_guard<std::mutex> l(mutexWriteFrame);
+                res = av_interleaved_write_frame(outFormatCtx, outAudioPacket);
+                if (res != 0) {
+                    std::cout << "Error while writing video frame, error: " << res << std::endl;
+                    return -1;
+                }
+            av_packet_unref(outAudioPacket);
+            av_packet_free(&outAudioPacket);
         }
         av_frame_unref(inAudioFrame);
         av_packet_unref(inAudioPacket);
@@ -489,54 +549,55 @@ int ScreenRecorder::transcodeAudio(SwrContext *pContext) {
 
 
 int ScreenRecorder::encode(int streamIndex, AVCodecContext* cctx, AVStream* outStream, AVFrame *convframe) {
-    outPacket = av_packet_alloc();
-    if (!outPacket) {
-        std::cout << "could not allocate memory for output packet" << std::endl;
-        return -1;
-    }
-    int  res = avcodec_send_frame(cctx, convframe);
-    if (res < 0) {
-        std::cout << "Error sending a frame for encoding" << std::endl;
-        return -1;
-    }
-
-    while (res >= 0) {
-        res = avcodec_receive_packet(cctx, outPacket);
-        if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) {
-            break;
-        } else if (res < 0) {
-            std::cout << "Error during encoding" << std::endl;
-            return -1;
-        }
-
-        outPacket->stream_index = streamIndex;
-        if(streamIndex == 0) {
-            outPacket->duration = outVideoStream->time_base.den * 16 / vEncoderCCtx->time_base.den;
-            outPacket->dts = outPacket->pts = vpts * outVideoStream->time_base.den * 16 / vEncoderCCtx->time_base.den;
-            vpts++;
-            if(vEncoderCCtx->coded_frame->key_frame)
-                outPacket->flags |= AV_PKT_FLAG_KEY;
-        }else {
-            outPacket->duration = outAudioStream->time_base.den * 1024 / aEncoderCCtx->sample_rate;
-            outPacket->dts = outPacket->pts =apts * outAudioStream->time_base.den * 1024 / aEncoderCCtx->sample_rate;
-            apts++;
-        }
-
-        std::cout << "before write frame: " << outPacket->pts << " " << outPacket->dts << " duration " << outPacket->duration << " streamindex: " << streamIndex <<res << std::endl;
-
-    std::lock_guard<std::mutex> l(mutexWriteFrame);
-    res = av_interleaved_write_frame(outFormatCtx, outPacket);
-    if (res != 0) {
-        std::cout << "Error while writing video frame, error: " << res << std::endl;
-        return -1;
-    }
-
-    if(streamIndex == 1)
-        break;
-
-    }
-    av_packet_unref(outPacket);
-    av_packet_free(&outPacket);
+//    outPacket = av_packet_alloc();
+//    if (!outPacket) {
+//        std::cout << "could not allocate memory for output packet" << std::endl;
+//        return -1;
+//    }
+//    int  res = avcodec_send_frame(cctx, convframe);
+//    if (res < 0) {
+//        std::cout << "Error sending a frame for encoding" << std::endl;
+//        return -1;
+//    }
+//
+//    while (res >= 0) {
+//        res = avcodec_receive_packet(cctx, outPacket);
+//        if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) {
+//            break;
+//        } else if (res < 0) {
+//            std::cout << "Error during encoding" << std::endl;
+//            return -1;
+//        }
+//
+//        outPacket->stream_index = streamIndex;
+//        if(streamIndex == 0) {
+//
+//            outPacket->duration = outVideoStream->time_base.den * 1 / vEncoderCCtx->time_base.den;
+//            outPacket->dts = outPacket->pts = vpts * outVideoStream->time_base.den * 1 / vEncoderCCtx->time_base.den;
+//            vpts++;
+//            if(vEncoderCCtx->coded_frame->key_frame)
+//                outPacket->flags |= AV_PKT_FLAG_KEY;
+//        }else {
+//            outPacket->duration = outAudioStream->time_base.den * 1024 / aEncoderCCtx->sample_rate;
+//            outPacket->dts = outPacket->pts = apts * outAudioStream->time_base.den * 1024 / aEncoderCCtx->sample_rate;
+//            apts++;
+//        }
+//
+//        std::cout << "before write frame: " << outPacket->pts << " " << outPacket->dts << " duration " << outPacket->duration << " streamindex: " << streamIndex <<res << std::endl;
+//
+//    std::lock_guard<std::mutex> l(mutexWriteFrame);
+//    res = av_interleaved_write_frame(outFormatCtx, outPacket);
+//    if (res != 0) {
+//        std::cout << "Error while writing video frame, error: " << res << std::endl;
+//        return -1;
+//    }
+//
+//    if(streamIndex == 1)
+//        break;
+//
+//    }
+//    av_packet_unref(outPacket);
+//    av_packet_free(&outPacket);
     return 0;
 }
 

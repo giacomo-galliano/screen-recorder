@@ -45,7 +45,7 @@ class ScreenRecorder {
 
     AVAudioFifo *audioFifo;
 
-    AVPacket *inVideoPacket, *inAudioPacket, *outPacket;
+    AVPacket *inVideoPacket, *inAudioPacket, *outVideoPacket, *outAudioPacket;
     AVFrame *inVideoFrame, *inAudioFrame, *convAudioFrame, *convVideoFrame;
 
     int fillStreamInfo();
