@@ -12,12 +12,14 @@ int main(int argc, char **argv) {
     res = prepareDecoder(v_inFmtCtx, AVMEDIA_TYPE_VIDEO);
     res = prepareDecoder(a_inFmtCtx, AVMEDIA_TYPE_AUDIO);
 
-    FormatContext outFmtCtx = openOutput("screen_rec.mp4");
+    char* out_filename = "../media/screen_rec.mp4";
+    FormatContext outFmtCtx = openOutput(out_filename);
 
-    res = prepareEncoder(&v_inFmtCtx, &outFmtCtx, AVMEDIA_TYPE_VIDEO);
-    res = prepareEncoder(&a_inFmtCtx, &outFmtCtx, AVMEDIA_TYPE_AUDIO);
+    res = prepareEncoder(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
+    res = prepareEncoder(a_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_AUDIO);
 
     res = writeHeader(outFmtCtx);
     decode(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
+    decode(a_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_AUDIO);
     res = writeTrailer(outFmtCtx);
 }

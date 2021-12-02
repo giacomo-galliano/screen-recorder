@@ -41,12 +41,12 @@ int writeHeader(FormatContext& fmtCtx);
 int writeTrailer(FormatContext& fmtCtx);
 int writeFrame(FormatContext& fmtCtx, const Packet& pkt, AVMediaType mediaType);
 int prepareDecoder(FormatContext& fmtCtx, AVMediaType mediaType); //if ret<0 -> failed
-int prepareEncoder(FormatContext* inFmtCtx, FormatContext* outFmtCtx, AVMediaType mediaType);
+int prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFmtCtx, AVMediaType mediaType);
 int sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx, const AVPacket* pkt);
 int sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx, Packet&pkt);
 void decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, const AVMediaType& mediaType);
 void passFrame(Frame& frame, FormatContext& inCtx, FormatContext& outFmtCtx, const AVMediaType& mediaType);
 void encode(FormatContext& outFmtCtx, Frame& frame, const AVMediaType& mediaType);
-void generateOutStreams(FormatContext& outFmtCtx, const AVCodecParameters* par, const AVMediaType& mediaType);
+void generateOutStreams(FormatContext& outFmtCtx, const CodecContext& cCtx, const AVMediaType& mediaType);
 
 #endif //SCREEN_RECORDER_WRAPPERS_H

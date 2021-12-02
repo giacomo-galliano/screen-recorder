@@ -46,8 +46,6 @@ int prepareDecoder(FormatContext& fmtCtx, AVMediaType mediaType){
     AVCodec* codec = nullptr;
     int index = -1;
 
-    fmtCtx->probesize = 40000000;
-
     for(int i=0; i < fmtCtx->nb_streams; i++){
         if (fmtCtx->streams[i]->codecpar->codec_type == mediaType){
             index = i;
@@ -81,7 +79,7 @@ int prepareDecoder(FormatContext& fmtCtx, AVMediaType mediaType){
     return index;
 };
 
-int prepareEncoder(FormatContext* inFmtCtx, FormatContext* outFmtCtx, AVMediaType mediaType){
+int prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFmtCtx, AVMediaType mediaType){
     AVCodec* codec = nullptr;
     if(mediaType == AVMEDIA_TYPE_VIDEO){
         codec = avcodec_find_encoder(AV_CODEC_ID_H264);
@@ -99,22 +97,22 @@ int prepareEncoder(FormatContext* inFmtCtx, FormatContext* outFmtCtx, AVMediaTyp
     });
 
     if(mediaType == AVMEDIA_TYPE_VIDEO){
-        cCtx->codec_id = AV_CODEC_ID_H264;
+        cCtx->width = inFmtCtx.open_streams.find(0)->second.get()->width;
+        cCtx->height = inFmtCtx.open_streams.find(0)->second.get()->height;
         cCtx->pix_fmt = AV_PIX_FMT_YUV420P;
-        cCtx->codec_type = AVMEDIA_TYPE_VIDEO;
+        cCtx->time_base = (AVRational){1,60};
+        cCtx->framerate = av_inv_q(cCtx->time_base);
     }else if(mediaType == AVMEDIA_TYPE_AUDIO) {
-        cCtx->channels = inFmtCtx->open_streams.find(0)->second.get()->channels;
-        cCtx->channel_layout = av_get_default_channel_layout(inFmtCtx->open_streams.find(0)->second.get()->channels);
-        cCtx->sample_rate = inFmtCtx->open_streams.find(0)->second.get()->sample_rate;
+        cCtx->channels = inFmtCtx.open_streams.find(0)->second.get()->channels;
+        cCtx->channel_layout = av_get_default_channel_layout(inFmtCtx.open_streams.find(0)->second.get()->channels);
+        cCtx->sample_rate = inFmtCtx.open_streams.find(0)->second.get()->sample_rate;
         cCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
         cCtx->bit_rate = 32000;
         cCtx->time_base.num = 1;
         cCtx->time_base.den = cCtx->sample_rate;
     }
 
-    AVCodecParameters* cp;
-    avcodec_parameters_from_context(cp, cCtx.get());
-    generateOutStreams(*outFmtCtx, cp, mediaType);
+    generateOutStreams(outFmtCtx, cCtx, mediaType);
 
     if(avcodec_open2(cCtx.get(), codec, nullptr)<0){
         std::cerr << "Failed to initialize the decoder context for media type " << mediaType << std::endl;
@@ -122,9 +120,9 @@ int prepareEncoder(FormatContext* inFmtCtx, FormatContext* outFmtCtx, AVMediaTyp
     }
 
     if(mediaType == AVMEDIA_TYPE_VIDEO){
-        outFmtCtx->open_streams.emplace(0, std::move(cCtx));
+        outFmtCtx.open_streams.emplace(0, std::move(cCtx));
     }else if(mediaType == AVMEDIA_TYPE_AUDIO) {
-        outFmtCtx->open_streams.emplace(1, std::move(cCtx));
+        outFmtCtx.open_streams.emplace(1, std::move(cCtx));
     }
 
     return 0;
@@ -287,9 +285,9 @@ void encode(FormatContext& outFmtCtx, Frame& frame, const AVMediaType& mediaType
     }
 };
 
-void generateOutStreams(FormatContext& outFmtCtx, const AVCodecParameters* par, const AVMediaType& mediaType){
+void generateOutStreams(FormatContext& outFmtCtx, const CodecContext& cCtx, const AVMediaType& mediaType){
     AVStream* out_stream = avformat_new_stream(outFmtCtx.get(), nullptr);
-    avcodec_parameters_copy(out_stream->codecpar, par);
+    avcodec_parameters_from_context(out_stream->codecpar, cCtx.get());
     if(mediaType == AVMEDIA_TYPE_VIDEO){
         out_stream->index = 0;
     } else if(mediaType == AVMEDIA_TYPE_AUDIO){

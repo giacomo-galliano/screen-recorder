@@ -13,7 +13,7 @@ add_executable(
         src/wrappers/wrappers.cpp src/wrappers/wrappers.h
         src/wrappers/Frame.cpp src/wrappers/Frame.h
         src/wrappers/CodecContext.cpp src/wrappers/CodecContext.h
-        )
+        src/SettingsConf.cpp src/SettingsConf.h src/ScreenRecorder.cpp src/ScreenRecorder.h)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
