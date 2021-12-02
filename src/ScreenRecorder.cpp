@@ -117,9 +117,23 @@ int ScreenRecorder::openInput() {
         std::cout << "Couldn't create input AVFormatContext" << std::endl;
         return(-1);
     }
-
+#ifdef WINDOWS
+    AVDictionary* options = NULL;
+	//Set some options
+	//grabbing frame rate
+	//av_dict_set(&options,"framerate","5",0);
+	//The distance from the left edge of the screen or desktop
+	//av_dict_set(&options,"offset_x","20",0);
+	//The distance from the top edge of the screen or desktop
+	//av_dict_set(&options,"offset_y","40",0);
+	//Video frame size. The default is to capture the full screen
+	//av_dict_set(&options,"video_size","640x480",0);
+    vIft = av_find_input_format("gdigrab");
+#elif UNIX
     vIft = av_find_input_format("x11grab");
     aIft = av_find_input_format("pulse");
+#endif
+
     AVDictionary* options = NULL;
 //    av_dict_set(&options,"framerate","60",0);
 //    av_dict_set(&options,"video_size","wxga",0);
