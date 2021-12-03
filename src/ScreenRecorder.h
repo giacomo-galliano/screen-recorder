@@ -8,9 +8,11 @@ extern "C"
 #include "../include/libswscale/swscale.h"
 #include "../include/libswresample/swresample.h"
 #include "../include/libavdevice/avdevice.h"
-#include <inttypes.h>
+//#include <inttypes.h>
 #include "../include/libavutil/imgutils.h"
 #include "../include/libavutil/audio_fifo.h"
+#include "../include/libavutil/dict.h"
+
 }
 #include <iostream>
 
