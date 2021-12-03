@@ -320,10 +320,19 @@ int ScreenRecorder::decoding() {
 //    transcodeAudio(swr_ctx);
     //START THREADS
     std::thread threadVideo(&ScreenRecorder::transcodeVideo, this, sws_ctx);
+//    std::thread threadAudio(&ScreenRecorder::transcodeAudio, this, swr_ctx);
 
-    std::thread threadAudio(&ScreenRecorder::transcodeAudio, this, swr_ctx);
+//    std::this_thread::sleep_for(std::chrono::seconds(20));
+    //the user chose PAUSE
+
+    //wait for RESUME
+//    std::this_thread::sleep_for(std::chrono::seconds(10));
+
+
+//    std::cout << "thread in pausa" << std::endl;
+
     threadVideo.join();
-    threadAudio.join();
+//    threadAudio.join();
 //    std::this_thread::sleep_for(std::chrono::seconds(20));
 
     return 0;
@@ -343,8 +352,9 @@ int i = 0;
         return -1;
     }
 
-    while (av_read_frame(videoInFormatCtx, inVideoPacket) >= 0 && i++<1000) {
 
+
+    while (av_read_frame(videoInFormatCtx, inVideoPacket) >= 0 ) {
 
     int res = avcodec_send_packet(vDecoderCCtx, inVideoPacket);
     if(res<0){
@@ -434,7 +444,7 @@ int i = 0;
         av_frame_unref(inVideoFrame);
     }
         av_packet_unref(inVideoPacket);
-}
+    }
     return 0;
 }
 
