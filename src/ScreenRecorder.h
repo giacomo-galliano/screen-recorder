@@ -3,14 +3,14 @@
 
 extern "C"
 {
-#include <libavcodec/avcodec.h>
-#include <libavformat/avformat.h>
-#include <libswscale/swscale.h>
-#include <libswresample/swresample.h>
-#include <libavdevice/avdevice.h>
+#include "../include/libavcodec/avcodec.h"
+#include "../include/libavformat/avformat.h"
+#include "../include/libswscale/swscale.h"
+#include "../include/libswresample/swresample.h"
+#include "../include/libavdevice/avdevice.h"
 #include <inttypes.h>
-#include <libavutil/imgutils.h>
-#include <libavutil/audio_fifo.h>
+#include "../include/libavutil/imgutils.h"
+#include "../include/libavutil/audio_fifo.h"
 }
 #include <iostream>
 
