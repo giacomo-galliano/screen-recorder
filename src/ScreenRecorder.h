@@ -16,14 +16,16 @@ extern "C"
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include <atomic>
 
 static const int64_t FLICKS_TIMESCALE = 705600000;
 static const ::AVRational FLICKS_TIMESCALE_Q = { 1, FLICKS_TIMESCALE };
 
 class ScreenRecorder {
 
-    std::mutex m;
-    std::condition_variable cv;
+//    std::mutex m;
+//    std::condition_variable cv;
+    std::atomic<bool> stopT = false;
 
 
     const AVSampleFormat requireAudioFmt = AV_SAMPLE_FMT_FLTP;

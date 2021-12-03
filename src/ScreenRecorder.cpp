@@ -322,8 +322,11 @@ int ScreenRecorder::decoding() {
     std::thread threadVideo(&ScreenRecorder::transcodeVideo, this, sws_ctx);
 //    std::thread threadAudio(&ScreenRecorder::transcodeAudio, this, swr_ctx);
 
-//    std::this_thread::sleep_for(std::chrono::seconds(20));
-    //the user chose PAUSE
+
+    std::this_thread::sleep_for(std::chrono::seconds(20));
+//    the user chose STOP
+    stopT.store(true);
+
 
     //wait for RESUME
 //    std::this_thread::sleep_for(std::chrono::seconds(10));
@@ -339,7 +342,7 @@ int ScreenRecorder::decoding() {
 }
 
 int ScreenRecorder::transcodeVideo(SwsContext *pContext) {
-int i = 0;
+
     inVideoFrame = av_frame_alloc();
     if (!inVideoFrame) {
         std::cout << "Couldn't allocate AVFrame" << std::endl;
@@ -354,7 +357,7 @@ int i = 0;
 
 
 
-    while (av_read_frame(videoInFormatCtx, inVideoPacket) >= 0 ) {
+    while (av_read_frame(videoInFormatCtx, inVideoPacket) >= 0 && !stopT.load()) {
 
     int res = avcodec_send_packet(vDecoderCCtx, inVideoPacket);
     if(res<0){
@@ -399,6 +402,8 @@ int i = 0;
                   convVideoFrame->data, convVideoFrame->linesize);
 
         convVideoFrame->pts = vpts * outVideoStream->time_base.den * 1 / vEncoderCCtx->time_base.den;
+
+        //QUI METTERE IL CONVFRAME IN UNA LISTA DI FRAME E TORNARE INDIETRO AL WHILE, UN ALTRO THREAD SI OCCUPERA DELLA SECONDA PARTE
 
         if (res >= 0) {
             outVideoPacket = av_packet_alloc();
