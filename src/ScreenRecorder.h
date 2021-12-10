@@ -3,15 +3,15 @@
 
 extern "C"
 {
-#include "../include/libavcodec/avcodec.h"
-#include "../include/libavformat/avformat.h"
-#include "../include/libswscale/swscale.h"
-#include "../include/libswresample/swresample.h"
-#include "../include/libavdevice/avdevice.h"
+#include "libavcodec/avcodec.h"
+#include "libavformat/avformat.h"
+#include "libswscale/swscale.h"
+#include "libswresample/swresample.h"
+#include "libavdevice/avdevice.h"
 //#include <inttypes.h>
-#include "../include/libavutil/imgutils.h"
-#include "../include/libavutil/audio_fifo.h"
-#include "../include/libavutil/dict.h"
+#include "libavutil/imgutils.h"
+#include "libavutil/audio_fifo.h"
+#include "libavutil/dict.h"
 
 }
 #include <iostream>
@@ -28,8 +28,8 @@ class ScreenRecorder {
 
     AVFormatContext *videoInFormatCtx, *audioInFormatCtx;
     AVFormatContext *outFormatCtx;
-    AVInputFormat *vIft, *aIft;
-    AVOutputFormat *oft;
+    const AVInputFormat *vIft, *aIft;
+    const AVOutputFormat *oft;
 
     AVDictionary *muxerOptions;
 
@@ -39,7 +39,7 @@ class ScreenRecorder {
     AVStream *outVideoStream, *outAudioStream;
 
     AVCodecContext *vDecoderCCtx, *vEncoderCCtx, *aDecoderCCtx, *aEncoderCCtx;
-    AVCodec *vDecoderC, *vEncoderC, *aDecoderC, *aEncoderC;
+    const AVCodec *vDecoderC, *vEncoderC, *aDecoderC, *aEncoderC;
 
     AVAudioFifo *audioFifo;
 

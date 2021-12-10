@@ -3,7 +3,12 @@ project(screen-recorder)
 
 set(CMAKE_CXX_STANDARD 17)
 
-include_directories(include)
+include_directories(${PROJECT_SOURCE_DIR}/include)
+
+file(GLOB_RECURSE libav CONFIGURE_DEPENDS
+        ${PROJECT_SOURCE_DIR}/include/*.h
+        ${PROJECT_SOURCE_DIR}/include/*.cpp
+        )
 
 IF (WIN32)
     MESSAGE(STATUS "Platform is Windows")
@@ -21,7 +26,8 @@ ENDIF ()
 
 add_executable(
         screen-recorder src/main.cpp
-        src/ScreenRecorder.cpp src/ScreenRecorder.h)
+        src/ScreenRecorder.cpp src/ScreenRecorder.h
+        ${libav})
 
 #find_package(PkgConfig REQUIRED)
 #pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
@@ -33,15 +39,15 @@ add_executable(
 #        libswscale
 #        libswresample
 #        )
-target_link_libraries(screen-recorder
-    avcodec
-    avdevice
-    avfilter
-    avformat
-    avutil
-    swscale
-    swresample
-)
+#target_link_libraries(screen-recorder
+#    avcodec
+#    avdevice
+#    avfilter
+#    avformat
+#    avutil
+#    swscale
+#    swresample
+#)
 
 
 #target_link_libraries(${PROJECT_NAME}

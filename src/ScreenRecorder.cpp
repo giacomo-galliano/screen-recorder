@@ -562,9 +562,6 @@ int ScreenRecorder::encode(int* i, int streamIndex, AVCodecContext* cctx, AVStre
             outPacket->duration = outVideoStream->time_base.den * 16 / vEncoderCCtx->time_base.den;
             outPacket->dts = outPacket->pts = vpts * outVideoStream->time_base.den * 16 / vEncoderCCtx->time_base.den;
             vpts++;
-            if(vEncoderCCtx->coded_frame->key_frame)
-                outPacket->flags |= AV_PKT_FLAG_KEY;
-
 
         }else {
             outPacket->duration = outAudioStream->time_base.den * 1024 / aEncoderCCtx->sample_rate;
