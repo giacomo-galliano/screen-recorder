@@ -1,14 +1,15 @@
 cmake_minimum_required(VERSION 3.18.4)
+
 project(screen-recorder)
 
 set(CMAKE_CXX_STANDARD 17)
 
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
-file(GLOB_RECURSE libav CONFIGURE_DEPENDS
-        ${PROJECT_SOURCE_DIR}/include/*.h
-        ${PROJECT_SOURCE_DIR}/include/*.cpp
-        )
+#file(GLOB_RECURSE libav CONFIGURE_DEPENDS
+#        ${PROJECT_SOURCE_DIR}/include/*.h
+#        ${PROJECT_SOURCE_DIR}/include/*.cpp
+#        )
 
 IF (WIN32)
     MESSAGE(STATUS "Platform is Windows")
@@ -26,8 +27,7 @@ ENDIF ()
 
 add_executable(
         screen-recorder src/main.cpp
-        src/ScreenRecorder.cpp src/ScreenRecorder.h
-        ${libav})
+        src/ScreenRecorder.cpp src/ScreenRecorder.h)
 
 #find_package(PkgConfig REQUIRED)
 #pkg_check_modules(LIBAV REQUIRED IMPORTED_TARGET
@@ -39,6 +39,16 @@ add_executable(
 #        libswscale
 #        libswresample
 #        )
+
+target_link_libraries(screen-recorder
+        ${PROJECT_SOURCE_DIR}/lib/libavcodec.a
+        ${PROJECT_SOURCE_DIR}/lib/libavdevice.a
+        ${PROJECT_SOURCE_DIR}/lib/libavfilter.a
+        ${PROJECT_SOURCE_DIR}/lib/libavformat.a
+        ${PROJECT_SOURCE_DIR}/lib/libavutil.a
+        ${PROJECT_SOURCE_DIR}/lib/libswresample.a
+        ${PROJECT_SOURCE_DIR}/lib/libswscale.a)
+
 #target_link_libraries(screen-recorder
 #    avcodec
 #    avdevice
