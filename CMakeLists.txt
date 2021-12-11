@@ -1,9 +1,8 @@
 cmake_minimum_required(VERSION 3.18.4)
+
 project(screen-recorder)
 
 set(CMAKE_CXX_STANDARD 17)
-
-include_directories(include)
 
 IF (WIN32)
     MESSAGE(STATUS "Platform is Windows")
