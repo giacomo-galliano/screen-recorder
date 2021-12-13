@@ -4,6 +4,7 @@
 #include <iostream>
 #include <algorithm>
 
+#include "ScreenRecorder.h"
 /*
  * vofs = video only fullscreen
  * avfs = audio and video fullscreen
@@ -11,19 +12,20 @@
  * avsp = audio video screen portion
  */
 enum Command{
-    stop, vofs, avfs, vosp, avsp
+    stop, vofs, vosp, avfs, avsp
 };
 
 class SettingsConf {
 public:
-    void welcome_msg();
-    Command options_menu();
-    void show_audio_video_options();
-    void show_screen_options();
-    static int get_answer();
-    static bool valid_answer(std::string &answer);
-    static bool valid_answer(std::string &answer, bool &res);
-    static bool yes_no_question(std::string const &message);
+    Command optionsMenu();
+private:
+    void welcomeMsg();
+    void showAudioVideoOptions();
+    void showScreenOptions();
+    static int getAnswer();
+    static bool validAnswer(std::string &answer);
+    static bool validAnswer(std::string &answer, bool &res);
+    static bool yesNoQuestion(std::string const &message);
 };
 
 

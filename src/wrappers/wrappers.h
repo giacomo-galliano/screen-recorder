@@ -11,6 +11,7 @@
 #include "Packet.h"
 #include "CodecContext.h"
 #include "Frame.h"
+#include "../ScreenRecorder.h"
 
 /*
  * the idea is to immediately attach the deleter, so that when the unique_ptr goes out of scope,
@@ -29,9 +30,8 @@
  */
 
 //////////////////////////////////////////////////////// IN common.h
-const AVSampleFormat requireAudioFmt = AV_SAMPLE_FMT_FLTP;
+inline int in_a_index, in_v_index;
 inline AVAudioFifo* audioFifo;
-////////////////////////////////////////////////////////
 inline SwsContext* sws_ctx = nullptr;
 inline SwrContext* swr_ctx = nullptr;
 

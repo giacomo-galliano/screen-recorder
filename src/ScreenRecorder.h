@@ -1,16 +1,64 @@
 #ifndef SCREEN_RECORDER_SCREENRECORDER_H
 #define SCREEN_RECORDER_SCREENRECORDER_H
 
+#include <atomic>
+#include <iostream>
+#include <memory>
+#include <functional>
+#include <map>
+#include <thread>
+
+#include "./wrappers/com.h"
+#include "./wrappers/FormatContext.h"
+#include "./wrappers/Packet.h"
+#include "./wrappers/CodecContext.h"
+#include "./wrappers/Frame.h"
+#include "SettingsConf.h"
+
 #define OUT_VIDEO_INDEX 0
 #define OUT_AUDIO_INDEX 1
 
-#include "SettingsConf.h"
+inline const AVSampleFormat requireAudioFmt = AV_SAMPLE_FMT_FLTP;
 
 class ScreenRecorder {
-int in_v_index, in_a_index;
-
 public:
-    void start(Command cmd);
+    int rec_type;
+    std::atomic_bool finished, recording, pause;
+
+    ScreenRecorder();
+    void open_();
+    void start_();
+    void pause_();
+    void restart_();
+    void stop_();
+
+private:
+    int in_v_index, in_a_index;
+    FormatContext v_inFmtCtx, a_inFmtCtx, outFmtCtx;
+    AVAudioFifo* audioFifo;
+    SwsContext* sws_ctx = nullptr;
+    SwrContext* swr_ctx = nullptr;
+
+    std::thread* audioThread;
+    std::thread* videoThread;
+
+    void init();
+    int readFrame(AVFormatContext* fmtCtx, AVPacket* pkt);
+    int writeHeader(FormatContext& fmtCtx);
+    int writeTrailer(FormatContext& fmtCtx);
+    void writeFrame(FormatContext& fmtCtx, const Packet& pkt, AVMediaType mediaType);
+    int prepareDecoder(FormatContext& fmtCtx, AVMediaType mediaType); //if ret<0 -> failed
+    int prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFmtCtx, AVMediaType mediaType);
+    int sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx, const AVPacket* pkt);
+    void decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, const AVMediaType& mediaType);
+    void passFrame(Frame& frame, FormatContext& inCtx, FormatContext& outFmtCtx, const AVMediaType& mediaType);
+    void encode(FormatContext& outFmtCtx, Frame& frame, const AVMediaType& mediaType);
+    void generateOutStreams(FormatContext& outFmtCtx, const CodecContext& cCtx, const AVMediaType& mediaType);
+
+    void PSRMenu(); //pause-stop-restart menu
+    void showPSROptions();
+    static int getPSRAnswer();
+    static bool validPSRAnswer(std::string &answer, int &res);
 };
 
 #endif //SCREEN_RECORDER_SCREENRECORDER_H

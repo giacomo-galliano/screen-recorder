@@ -21,6 +21,7 @@ public:
     std::map<int, CodecContext> open_streams;
 };
 
+FormatContext openInput(AVMediaType mediaType);
 FormatContext openInput(const std::string& url, const std::string& ift_short_name, AVDictionary* options);
 FormatContext openOutput(const std::string& filename_out);
 

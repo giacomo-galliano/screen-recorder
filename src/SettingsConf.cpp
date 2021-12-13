@@ -9,24 +9,24 @@ void welcomeMsg(){
     )" << std::endl;
 }
 
-Command SettingsConf::options_menu(){
+Command SettingsConf::optionsMenu(){
     unsigned short res;
     while(true){
-        show_audio_video_options();
-        res = get_answer();
+        showAudioVideoOptions();
+        res = getAnswer();
         switch(res){
             case 0:
-                if(yes_no_question("Are you sure you want to quit?")){
+                if(yesNoQuestion("Are you sure you want to quit?")){
                     std::cout << "Closing screen recorder.." << std::endl;
                     return Command::stop;
                 }
                 break;
             case 1:
-                show_screen_options();
-                res = get_answer();
+                showScreenOptions();
+                res = getAnswer();
                 switch(res){
                     case 0:
-                        if(yes_no_question("Are you sure you want to quit?")){
+                        if(yesNoQuestion("Are you sure you want to quit?")){
                             std::cout << "Closing screen recorder.." << std::endl;
                             return Command::stop;
                         }
@@ -40,11 +40,11 @@ Command SettingsConf::options_menu(){
                 }
                 break;
             case 2:
-                show_screen_options();
-                res = get_answer();
+                showScreenOptions();
+                res = getAnswer();
                 switch(res){
                     case 0:
-                        if(yes_no_question("Are you sure you want to quit?")){
+                        if(yesNoQuestion("Are you sure you want to quit?")){
                             std::cout << "Closing screen recorder.." << std::endl;
                             return Command::stop;
                         }
@@ -63,31 +63,32 @@ Command SettingsConf::options_menu(){
     }
 }
 
-void SettingsConf::show_audio_video_options(){
+void SettingsConf::showAudioVideoOptions(){
     std::cout << "Which type of recording do you want to perform?\n"
               << "\t1. Record only video\n"
               << "\t2. Record both audio and video\n"
-              << "\tq. Exit\n\n"
+              << "\tq. Exit\n"
               << ">> ";
 }
 
-void SettingsConf::show_screen_options(){
+void SettingsConf::showScreenOptions(){
     std::cout << "Which portion of the screen do you want to record?\n"
               << "\t1. Record fullscreen\n"
               << "\t2. Record only a portion of the screen\n"
-              << "\tq. Exit\n\n"
+              << "\tq. Exit\n"
               << ">> ";
 }
 
-bool SettingsConf::valid_answer(std::string &answer){
+bool SettingsConf::validAnswer(std::string &answer){
     std::transform(answer.begin(), answer.end(), answer.begin(), [](char c){return tolower(c);});
 
-    bool valid_ans = (answer == "q") || (answer == "quit") || (answer == "exit");
+    bool valid_ans = (answer == "q") || (answer == "quit") || (answer == "exit") ||
+                     (answer == "s") || (answer == "stop");
 
     return valid_ans;
 }
 
-bool SettingsConf::valid_answer(std::string &answer, bool &res){
+bool SettingsConf::validAnswer(std::string &answer, bool &res){
     std::transform(answer.begin(), answer.end(), answer.begin(), [](char c){return tolower(c);});
 
     bool valid_ans = (answer == "y") || (answer == "yes") ||
@@ -96,13 +97,13 @@ bool SettingsConf::valid_answer(std::string &answer, bool &res){
     return valid_ans;
 }
 
-bool SettingsConf::yes_no_question(std::string const &message){
+bool SettingsConf::yesNoQuestion(std::string const &message){
     std::string user_answer;
     bool res;
 
     std::cout << message << " [y/n] ";
-    while(std::cin >> user_answer && !valid_answer(user_answer, res)){
-        std::cout << "Invalid answer, retry.\n" << message << " [y/n] ";
+    while(std::cin >> user_answer && !validAnswer(user_answer, res)){
+        std::cout << "\033[1;31m" << "Invalid answer, retry.\n" << "\033[0m" << message << " [y/n] ";
     }
 
     if(!std::cin){
@@ -112,11 +113,11 @@ bool SettingsConf::yes_no_question(std::string const &message){
     return res; //true if "yes", false if "no"
 }
 
-int SettingsConf::get_answer(){
+int SettingsConf::getAnswer(){
     std::string user_answer;
 
-    while(std::cin >> user_answer && (!valid_answer(user_answer) && (user_answer!="1" && user_answer!="2"))){
-        std::cout << "Invalid answer " << user_answer << "\nTry again.." << std::endl;
+    while(std::cin >> user_answer && (!validAnswer(user_answer) && (user_answer!="1" && user_answer!="2"))){
+        std::cout << "\033[1;31m" << "Invalid answer: \"" << user_answer << "\". Try again.\n" << "\033[0m" << ">> ";
     }
     if(!std::cin){
         //throw std::runtime_error("Failed to read user input");
