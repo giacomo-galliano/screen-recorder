@@ -324,13 +324,13 @@ void ScreenRecorder::passFrame(Frame& frame, FormatContext& inCtx, FormatContext
             std::cerr << "An error occured while filling the image array" << std::endl;
         };
 
-        /*
-        convFrame->width = outFmtCtx.open_streams.find(0)->second.get().width;
-        convFrame->height = outFmtCtx.open_streams.find(0)->second.get().height;
-        convFrame->format = outFmtCtx.open_streams.find(0)->second.get().pix_fmt;
 
-        av_frame_copy_props(convFrame.get(), frame.get());
-         */
+        convFrame->width = outFmtCtx.open_streams.find(0)->second.get()->width;
+        convFrame->height = outFmtCtx.open_streams.find(0)->second.get()->height;
+        convFrame->format = outFmtCtx.open_streams.find(0)->second.get()->pix_fmt;
+
+        //av_frame_copy_props(convFrame.get(), frame.get());
+
 
         sws_scale(sws_ctx, (uint8_t const *const *)frame->data, frame->linesize, 0,
                   frame->height, convFrame->data, convFrame->linesize);
