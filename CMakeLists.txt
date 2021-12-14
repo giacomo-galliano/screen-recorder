@@ -4,8 +4,6 @@ project(screen-recorder)
 
 set(CMAKE_CXX_STANDARD 17)
 
-include_directories(${PROJECT_SOURCE_DIR}/include)
-
 #file(GLOB_RECURSE libav CONFIGURE_DEPENDS
 #        ${PROJECT_SOURCE_DIR}/include/*.h
 #        ${PROJECT_SOURCE_DIR}/include/*.cpp
@@ -23,6 +21,9 @@ ELSEIF (APPLE)
 ELSEIF (UNIX)
     MESSAGE(STATUS "Platform is UNIX")
     add_definitions(-DUNIX)
+
+    include_directories(${PROJECT_SOURCE_DIR}/include)
+    link_directories(${PROJECT_SOURCE_DIR}/lib)
 ENDIF ()
 
 add_executable(
@@ -39,7 +40,7 @@ add_executable(
 #        libswscale
 #        libswresample
 #        )
-
+#
 target_link_libraries(screen-recorder
         ${PROJECT_SOURCE_DIR}/lib/libavcodec.a
         ${PROJECT_SOURCE_DIR}/lib/libavdevice.a
@@ -48,6 +49,17 @@ target_link_libraries(screen-recorder
         ${PROJECT_SOURCE_DIR}/lib/libavutil.a
         ${PROJECT_SOURCE_DIR}/lib/libswresample.a
         ${PROJECT_SOURCE_DIR}/lib/libswscale.a)
+#        ${PROJECT_SOURCE_DIR}/lib/libx265.a
+#        ${PROJECT_SOURCE_DIR}/lib/libx264.a
+#        ${PROJECT_SOURCE_DIR}/lib/libvpx.a
+#        ${PROJECT_SOURCE_DIR}/lib/libvmaf.a
+#        ${PROJECT_SOURCE_DIR}/lib/libSvtAv1Enc.a
+#        ${PROJECT_SOURCE_DIR}/lib/libpostproc.a
+#        ${PROJECT_SOURCE_DIR}/lib/libopus.la
+#        ${PROJECT_SOURCE_DIR}/lib/libopus.a
+#        ${PROJECT_SOURCE_DIR}/lib/libfdk-aac.la
+#        ${PROJECT_SOURCE_DIR}/lib/libfdk-aac.a
+#        ${PROJECT_SOURCE_DIR}/lib/libdav1d.a)
 
 #target_link_libraries(screen-recorder
 #    avcodec
