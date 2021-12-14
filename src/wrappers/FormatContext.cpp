@@ -74,7 +74,7 @@ FormatContext openInput(AVMediaType mediaType){
 };
 
 FormatContext openInput(const std::string& url, const std::string& ift_short_name, AVDictionary* options){
-    AVFormatContext* inFmtCtx = nullptr;
+    AVFormatContext* inFmtCtx = avformat_alloc_context();
     //inserire variabile a seconda dell'ambiente di esecuzione
     AVInputFormat* ift = av_find_input_format(ift_short_name.c_str());
 
