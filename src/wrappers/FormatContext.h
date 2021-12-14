@@ -16,8 +16,8 @@ public:
     template <class T>
     FormatContext(AVFormatContext* fmtCtx, T customDeleter): FormatContextBase(fmtCtx, customDeleter){};
 
-    Packet end(){return Packet();};
-    Packet begin(){return Packet(get());};
+//    Packet end(){return Packet();};
+//    Packet begin(){return Packet(get());};
     std::map<int, CodecContext> open_streams;
 };
 

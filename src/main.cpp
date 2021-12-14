@@ -7,12 +7,13 @@
 int main(int argc, char **argv) {
 
 
-    ScreenRecorder* sr;
+    ScreenRecorder* sr = new ScreenRecorder();
 
         SettingsConf sc;
         sr->rec_type = sc.optionsMenu();
 
         sr->open_();
+        sr->start_();
 
         return 0;
     /*

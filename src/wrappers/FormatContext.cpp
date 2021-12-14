@@ -3,7 +3,7 @@
 FormatContext::FormatContext():FormatContextBase(nullptr, [](AVFormatContext*){}){};
 
 FormatContext openInput(AVMediaType mediaType){
-    AVFormatContext* inFmtCtx = nullptr;
+    AVFormatContext* inFmtCtx = avformat_alloc_context();
     //inserire variabile a seconda dell'ambiente di esecuzione
     AVInputFormat* ift;
 
@@ -56,13 +56,13 @@ FormatContext openInput(AVMediaType mediaType){
 
 #endif
 
+    inFmtCtx->probesize = 40000000;
+
     res = avformat_find_stream_info(inFmtCtx, nullptr);
     if(res < 0){
         avformat_close_input(&inFmtCtx);
         return FormatContext();
     }
-
-    inFmtCtx->probesize = 40000000;
 
     return FormatContext(inFmtCtx, [](AVFormatContext* inCtx){
         /*
@@ -106,7 +106,8 @@ FormatContext openInput(const std::string& url, const std::string& ift_short_nam
 }
 
 FormatContext openOutput(const std::string& filename_out){
-    AVFormatContext* outFmtCtx = nullptr;
+    //AVFormatContext* outFmtCtx = nullptr;
+    AVFormatContext* outFmtCtx = avformat_alloc_context();
 
     AVOutputFormat* oft = av_guess_format(nullptr, filename_out.c_str(), nullptr);
     if(!oft){

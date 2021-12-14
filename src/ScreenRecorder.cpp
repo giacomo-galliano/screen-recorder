@@ -38,6 +38,7 @@ void ScreenRecorder::open_(){
 void ScreenRecorder::start_(){
     switch(rec_type){
         case Command::vofs:
+            prepareDecoder(v_inFmtCtx, AVMEDIA_TYPE_VIDEO);
             prepareEncoder(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
             writeHeader(outFmtCtx);
             videoThread = new std::thread([this](){
@@ -47,6 +48,8 @@ void ScreenRecorder::start_(){
             });
             break;
         case Command::avfs:
+            prepareDecoder(v_inFmtCtx, AVMEDIA_TYPE_VIDEO);
+            prepareDecoder(a_inFmtCtx, AVMEDIA_TYPE_AUDIO);
             prepareEncoder(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
             prepareEncoder(a_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_AUDIO);
             writeHeader(outFmtCtx);
@@ -247,7 +250,7 @@ int ScreenRecorder::prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFm
 };
 
 void ScreenRecorder::decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, const AVMediaType& mediaType){
-
+    /*
     int index = 0;
     int nframe = 200;
     Packet pkt = Packet(inFmtCtx.get());
@@ -256,8 +259,10 @@ void ScreenRecorder::decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, c
             sendPacket(inFmtCtx, outFmtCtx, pkt.get());
         }
     }
-    /*
+    */
     Packet pkt = Packet(inFmtCtx.get());
+
+    std::unique_lock<std::mutex> ul(m);
 
     while(true){
         //cv.wait(ul, [this] (){return !pause;});
@@ -270,7 +275,6 @@ void ScreenRecorder::decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, c
             sendPacket(inFmtCtx, outFmtCtx, pkt.get());
         }
     }
-     */
 };
 
 int ScreenRecorder::sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx, const AVPacket* pkt){ //, std::function<void(Frame&)>pFrame
@@ -436,11 +440,11 @@ void ScreenRecorder::writeFrame(FormatContext& fmtCtx, const Packet& pkt, AVMedi
 
     //av_packet_rescale_ts(&dup, FLICKS_TIMESCALE_Q, track->time_base);
 
-    //write_lock.lock();
+    write_lock.lock();
     if(av_interleaved_write_frame(fmtCtx.get(), &dup) != 0){
         //throw
     };
-    //write_lock.unlock();
+    write_lock.unlock();
     av_packet_unref(&dup);
 };
 

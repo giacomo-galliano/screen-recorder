@@ -7,6 +7,8 @@
 #include <functional>
 #include <map>
 #include <thread>
+#include <mutex>
+#include <condition_variable>
 
 #include "./wrappers/com.h"
 #include "./wrappers/FormatContext.h"
@@ -38,6 +40,10 @@ private:
     AVAudioFifo* audioFifo;
     SwsContext* sws_ctx = nullptr;
     SwrContext* swr_ctx = nullptr;
+
+    std::mutex m;
+    std::mutex write_lock;
+    std::condition_variable cv;
 
     std::thread* audioThread;
     std::thread* videoThread;
