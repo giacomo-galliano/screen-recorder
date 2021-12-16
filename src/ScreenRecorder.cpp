@@ -10,6 +10,8 @@ ScreenRecorder::ScreenRecorder() {
     last_pts = 0;
     last_apts = 0;
 
+    vptsf=0.0;
+
     outFilename = "../media/output.mp4";
     muxerOptions = nullptr;
 }
@@ -180,13 +182,13 @@ int ScreenRecorder::prepareEncoder() {
     av_opt_set(vEncoderCCtx->priv_data, "x264-params","keyint=250:min-keyint=60:level=4.1:fps=60:crf=1", 0);
 
     vEncoderCCtx->time_base = (AVRational){1, 30};
-    //vEncoderCCtx->framerate = (AVRational){60, 1};
+    vEncoderCCtx->framerate = (AVRational){30, 1};
     vEncoderCCtx->width = vDecoderCCtx->width;
     vEncoderCCtx->height = vDecoderCCtx->height;
     vEncoderCCtx->pix_fmt  = AV_PIX_FMT_YUV420P;
     vEncoderCCtx->codec_id = AV_CODEC_ID_H264;
     vEncoderCCtx->codec_type = AVMEDIA_TYPE_VIDEO;
-//    vEncoderCCtx->gop_size = 1;
+    vEncoderCCtx->gop_size = 0;
 //    vEncoderCCtx->bit_rate = 4000;
 //    vEncoderCCtx->level = 31;
     vEncoderCCtx->framerate = av_inv_q(vEncoderCCtx->time_base);
@@ -356,8 +358,12 @@ int ScreenRecorder::transcodeVideo(SwsContext *pContext) {
     }
 
 
-
     while (av_read_frame(videoInFormatCtx, inVideoPacket) >= 0 && !stopT.load()) {
+        //prova1.0 pts
+//        av_packet_rescale_ts(inVideoPacket,
+//                             videoInFormatCtx->streams[videoIndex]->time_base,
+//                             vDecoderCCtx->time_base);
+        //
 
     int res = avcodec_send_packet(vDecoderCCtx, inVideoPacket);
     if(res<0){
@@ -373,7 +379,9 @@ int ScreenRecorder::transcodeVideo(SwsContext *pContext) {
             std::cout << "Error during encoding" << std::endl;
             return res;
         }
-
+        //prova1.0
+//        inVideoFrame->pts = inVideoFrame->best_effort_timestamp;
+        //
         convVideoFrame = av_frame_alloc();
         if (!convVideoFrame) {
             std::cout << "Couldn't allocate AVFrame" << std::endl;
@@ -401,7 +409,14 @@ int ScreenRecorder::transcodeVideo(SwsContext *pContext) {
                   inVideoFrame->linesize, 0, vDecoderCCtx->height,
                   convVideoFrame->data, convVideoFrame->linesize);
 
-        convVideoFrame->pts = vpts * outVideoStream->time_base.den * 1 / vEncoderCCtx->time_base.den;
+//        convVideoFrame->pts = vpts * outVideoStream->time_base.den * 1 / vEncoderCCtx->time_base.den;
+        //prova1.0 pts
+//        convVideoFrame->pts = inVideoFrame->pts;
+        //
+        //prova2.0
+        convVideoFrame->pts = vDecoderCCtx->frame_number;
+        //
+
 
         //QUI METTERE IL CONVFRAME IN UNA LISTA DI FRAME E TORNARE INDIETRO AL WHILE, UN ALTRO THREAD SI OCCUPERA DELLA SECONDA PARTE
 
@@ -425,15 +440,22 @@ int ScreenRecorder::transcodeVideo(SwsContext *pContext) {
                     std::cout << "Error during encoding" << std::endl;
                     return -1;
                 }
-
+                //prova2.0 pts
                 outVideoPacket->stream_index = 0;
                 outVideoPacket->duration = outVideoStream->time_base.den * 1 / vEncoderCCtx->time_base.den;
-                outVideoPacket->dts = outVideoPacket->pts = vpts * outVideoStream->time_base.den * 1 / vEncoderCCtx->time_base.den;
-                vpts++;
+                outVideoPacket->dts = outVideoPacket->pts = vEncoderCCtx->frame_number * outVideoStream->time_base.den * 1 / vEncoderCCtx->time_base.den;
+                //
+                //prova1.0 pts
+//                av_packet_rescale_ts(outVideoPacket,
+//                                     vEncoderCCtx->time_base,
+//                                     outVideoStream->time_base);
+                //
+
+//
                 if(vEncoderCCtx->coded_frame->key_frame)
                     outVideoPacket->flags |= AV_PKT_FLAG_KEY;
 
-                std::cout << "before write frame: " << outVideoPacket->pts << " " << outVideoPacket->dts << " duration " << outVideoPacket->duration << " streamindex: " << outVideoPacket->stream_index << std::endl;
+                std::cout << "before write frame: " << vptsf << " " << outVideoPacket->dts << " duration " << outVideoPacket->duration << " streamindex: " << outVideoPacket->stream_index << std::endl;
 
 //                std::lock_guard<std::mutex> l(mutexWriteFrame);
                 res = av_interleaved_write_frame(outFormatCtx, outVideoPacket);

@@ -41,7 +41,7 @@ class ScreenRecorder {
 
     int videoIndex, audioIndex;
     int64_t vpts, apts, vdts, last_pts, last_apts;
-
+    float vptsf;
     AVStream *outVideoStream, *outAudioStream;
 
     AVCodecContext *vDecoderCCtx, *vEncoderCCtx, *aDecoderCCtx, *aEncoderCCtx;
