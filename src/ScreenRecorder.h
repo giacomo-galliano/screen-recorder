@@ -35,6 +35,7 @@ public:
     void stop_();
 
 private:
+    int vPTS;
     int in_v_index, in_a_index;
     FormatContext v_inFmtCtx, a_inFmtCtx, outFmtCtx;
     AVAudioFifo* audioFifo;
