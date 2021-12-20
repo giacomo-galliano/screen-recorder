@@ -131,8 +131,8 @@ int ScreenRecorder::readFrame(AVFormatContext* fmtCtx, AVPacket* pkt){
     }
     int err = av_read_frame(fmtCtx, pkt);
     if(err >= 0){
-//        auto& stream = fmtCtx->streams[pkt->stream_index];
-        //av_packet_rescale_ts(pkt, stream->time_base, )
+        //auto& stream = fmtCtx->streams[pkt->stream_index];
+        //av_packet_rescale_ts(pkt, stream->time_base, FLICKS_TIMESCALE_Q);
     }else{
         av_init_packet(pkt);
         pkt->size = 0;
@@ -220,10 +220,8 @@ int ScreenRecorder::prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFm
         cCtx->width = inFmtCtx.open_streams.find(in_v_index)->second.get()->width;
         cCtx->height = inFmtCtx.open_streams.find(in_v_index)->second.get()->height;
         cCtx->pix_fmt = AV_PIX_FMT_YUV420P;
-        cCtx->time_base = (AVRational){1,60};
+        cCtx->time_base = (AVRational){1,30};
         cCtx->framerate = av_inv_q(cCtx->time_base);
-        //mia modifica
-//        cCtx->codec_id = AV_CODEC_ID_H264;
     }else if(mediaType == AVMEDIA_TYPE_AUDIO) {
         cCtx->channels = inFmtCtx.open_streams.find(in_a_index)->second.get()->channels;
         cCtx->channel_layout = av_get_default_channel_layout(inFmtCtx.open_streams.find(in_a_index)->second.get()->channels);
@@ -472,8 +470,7 @@ void ScreenRecorder::writeFrame(FormatContext& fmtCtx, const Packet& pkt, AVMedi
     //mia modifica
     dup.duration = track->time_base.den / fmtCtx.open_streams.find(0)->second.get()->time_base.den;
     dup.dts = dup.pts = vPTS * track->time_base.den / fmtCtx.open_streams.find(0)->second.get()->time_base.den;
-//    vPTS++;
-    //
+    //vPTS++;
     //av_packet_rescale_ts(&dup, FLICKS_TIMESCALE_Q, track->time_base);
 
     write_lock.lock();
