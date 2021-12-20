@@ -273,11 +273,11 @@ void ScreenRecorder::decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, c
     std::unique_lock<std::mutex> ul(m);
 
     while(true){
-        cv.wait(ul, [this] (){return !pause;});
+        //cv.wait(ul, [this] (){return !pause;});
         if(finished){
             break;
         }
-        ul.unlock();
+        //ul.unlock();
 
         if(readFrame(inFmtCtx.get(), pkt.get()) >= 0){
             sendPacket(inFmtCtx, outFmtCtx, pkt.get());
@@ -411,7 +411,7 @@ void ScreenRecorder::passFrame(Frame& frame, FormatContext& inCtx, FormatContext
             res = av_frame_get_buffer(convFrame.get(), 0);
             res = av_audio_fifo_read(audioFifo, (void**)convFrame->data, outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size);
 
-            convFrame->pts = aPTS++;
+            convFrame->pts = aPTS * outFmtCtx->streams[OUT_AUDIO_INDEX]->time_base.den * 1024 / outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->sample_rate;;
 
             encode(outFmtCtx, convFrame, mediaType);
 
