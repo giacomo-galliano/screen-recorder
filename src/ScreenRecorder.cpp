@@ -3,6 +3,7 @@
 ScreenRecorder::ScreenRecorder() : recording(false), pause(false), finished(false){
     init();
     vPTS = 0;
+    aPTS = 0;
 }
 
 void ScreenRecorder::open_(){
@@ -177,6 +178,12 @@ int ScreenRecorder::prepareDecoder(FormatContext& fmtCtx, AVMediaType mediaType)
         return -1;
     }
 
+    if(mediaType == AVMEDIA_TYPE_VIDEO){
+        in_v_index = index;
+    }else if(mediaType == AVMEDIA_TYPE_AUDIO){
+        in_a_index = index;
+    }
+
     codec = avcodec_find_decoder(fmtCtx->streams[index]->codecpar->codec_id);
     if(!codec){
         std::cerr << "Failed to find the codec for media type " << mediaType << std::endl;
@@ -228,6 +235,7 @@ int ScreenRecorder::prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFm
         cCtx->channel_layout = av_get_default_channel_layout(inFmtCtx.open_streams.find(in_a_index)->second.get()->channels);
         cCtx->sample_rate = inFmtCtx.open_streams.find(in_a_index)->second.get()->sample_rate;
         cCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
+        cCtx->frame_size = 1024;
         cCtx->bit_rate = 32000;
         cCtx->time_base.num = 1;
         cCtx->time_base.den = cCtx->sample_rate;
@@ -265,11 +273,11 @@ void ScreenRecorder::decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, c
     std::unique_lock<std::mutex> ul(m);
 
     while(true){
-        //cv.wait(ul, [this] (){return !pause;});
+        cv.wait(ul, [this] (){return !pause;});
         if(finished){
             break;
         }
-        //ul.unlock();
+        ul.unlock();
 
         if(readFrame(inFmtCtx.get(), pkt.get()) >= 0){
             sendPacket(inFmtCtx, outFmtCtx, pkt.get());
@@ -403,7 +411,7 @@ void ScreenRecorder::passFrame(Frame& frame, FormatContext& inCtx, FormatContext
             res = av_frame_get_buffer(convFrame.get(), 0);
             res = av_audio_fifo_read(audioFifo, (void**)convFrame->data, outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size);
 
-            // convFrame->pts = apts++;
+            convFrame->pts = aPTS++;
 
             encode(outFmtCtx, convFrame, mediaType);
 
@@ -475,10 +483,16 @@ void ScreenRecorder::writeFrame(FormatContext& fmtCtx, const Packet& pkt, AVMedi
     auto& track = fmtCtx->streams[(mediaType==AVMEDIA_TYPE_VIDEO ? 0 : 1)];
 
     //mia modifica
-    dup.duration = track->time_base.den / fmtCtx.open_streams.find(0)->second.get()->time_base.den;
-    dup.dts = dup.pts = vPTS * track->time_base.den / fmtCtx.open_streams.find(0)->second.get()->time_base.den;
-    //vPTS++;
-    //av_packet_rescale_ts(&dup, FLICKS_TIMESCALE_Q, track->time_base);
+    if(mediaType == AVMEDIA_TYPE_VIDEO){
+        dup.duration = track->time_base.den / fmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base.den;
+        dup.dts = dup.pts = vPTS * track->time_base.den / fmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base.den;
+        //vPTS++;
+    }else if(mediaType == AVMEDIA_TYPE_AUDIO){
+        dup.duration = track->time_base.den * 1024 / fmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->sample_rate;
+        dup.dts = dup.pts = aPTS * track->time_base.den * 1024 / fmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->sample_rate;
+        aPTS++;
+    }
+
 
     write_lock.lock();
 //    std::cout << "write frame - vPTS =" << vPTS << std::endl;
