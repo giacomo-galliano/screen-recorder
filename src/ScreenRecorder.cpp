@@ -30,7 +30,8 @@ void ScreenRecorder::open_(){
             std::cout << "Command not recognized" << std::endl;
     }
     if(rec_type != Command::stop){
-        char* out_filename = "../media/screen_rec.mp4";
+        std::string out_filename;
+        getFilenameOut(out_filename);
         outFmtCtx = openOutput(out_filename);
     }
 
@@ -543,4 +544,14 @@ int ScreenRecorder::getPSRAnswer(){
     }
 
     return res;
+}
+
+void ScreenRecorder::getFilenameOut(std::string& str){
+    std::string filename;
+
+    std::cout << "Inserire nome del file output (senza spazi):\n>>  ";
+    std::cin >> filename;
+    // std::getline(std::cin, filename);
+    // std::replace(filename.begin(), filename.end(), ' ', '_');
+    str = "../media/" + filename + ".mp4";
 }

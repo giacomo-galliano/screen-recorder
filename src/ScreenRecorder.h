@@ -66,6 +66,8 @@ private:
     void showPSROptions();
     static int getPSRAnswer();
     static bool validPSRAnswer(std::string &answer, int &res);
+    void getFilenameOut(std::string& str);
+
 };
 
 #endif //SCREEN_RECORDER_SCREENRECORDER_H
