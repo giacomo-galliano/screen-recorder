@@ -369,9 +369,12 @@ void ScreenRecorder::passFrame(Frame& frame, FormatContext& inCtx, FormatContext
                                      inCtx->streams[in_a_index]->codecpar->sample_rate,
                                      0, nullptr);
 
+        swr_init(swr_ctx);
+        audioFifo = av_audio_fifo_alloc(requireAudioFmt, inCtx.open_streams.find(in_a_index)->second.get()->channels,
+                                        inCtx.open_streams.find(in_a_index)->second.get()->sample_rate*2);
 
         uint8_t **cSamples = nullptr;
-        int res = av_samples_alloc_array_and_samples(&cSamples, NULL, outFmtCtx.open_streams.find(1)->second.get()->channels, frame->nb_samples, requireAudioFmt, 0);
+        int res = av_samples_alloc_array_and_samples(&cSamples, NULL, outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->channels, frame->nb_samples, requireAudioFmt, 0);
         if (res < 0) {
             std::cerr << "Fail to alloc samples by av_samples_alloc_array_and_samples." << std::endl;
         }
@@ -440,6 +443,9 @@ void ScreenRecorder::encode(FormatContext& outFmtCtx, Frame& frame, const AVMedi
             res = avcodec_receive_packet(outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get(), pkt.get()); // outFmtCtx.open_streams.find(0)->second.get().get()
             pkt->stream_index = OUT_AUDIO_INDEX;
             writeFrame(outFmtCtx, pkt, mediaType);
+
+            av_packet_unref(pkt.get());
+
         }
     }
 };
