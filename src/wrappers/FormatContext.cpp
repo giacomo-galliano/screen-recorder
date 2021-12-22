@@ -55,8 +55,8 @@ FormatContext openInput(AVMediaType mediaType){
     }
 
 #endif
-
-    inFmtCtx->probesize = 40000000;
+        //TODO: capire a che valore settare (e se effetivamente serve)
+//    inFmtCtx->probesize = 40000000;
 
     res = avformat_find_stream_info(inFmtCtx, nullptr);
     if(res < 0){

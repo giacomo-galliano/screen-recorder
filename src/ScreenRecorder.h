@@ -35,7 +35,7 @@ public:
     void stop_();
 
 private:
-    int vPTS, aPTS;
+    long vPTS, aPTS;
     int in_v_index, in_a_index;
     FormatContext v_inFmtCtx, a_inFmtCtx, outFmtCtx;
     AVAudioFifo* audioFifo;
@@ -53,7 +53,7 @@ private:
     int readFrame(AVFormatContext* fmtCtx, AVPacket* pkt);
     int writeHeader(FormatContext& fmtCtx);
     int writeTrailer(FormatContext& fmtCtx);
-    void writeFrame(FormatContext& fmtCtx, const Packet& pkt, AVMediaType mediaType);
+    void writeFrame(FormatContext& fmtCtx, Packet& pkt, AVMediaType mediaType);
     int prepareDecoder(FormatContext& fmtCtx, AVMediaType mediaType); //if ret<0 -> failed
     int prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFmtCtx, AVMediaType mediaType);
     int sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx, const AVPacket* pkt);
