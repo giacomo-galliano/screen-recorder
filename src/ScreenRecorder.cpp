@@ -229,7 +229,7 @@ int ScreenRecorder::prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFm
         cCtx->width = inFmtCtx.open_streams.find(in_v_index)->second.get()->width;
         cCtx->height = inFmtCtx.open_streams.find(in_v_index)->second.get()->height;
         cCtx->pix_fmt = AV_PIX_FMT_YUV420P;
-        cCtx->time_base = (AVRational){1,20};
+        cCtx->time_base = (AVRational){1,30};
         cCtx->framerate = av_inv_q(cCtx->time_base);
 
     }else if(mediaType == AVMEDIA_TYPE_AUDIO) {
@@ -411,8 +411,6 @@ void ScreenRecorder::passFrame(Frame& frame, FormatContext& inCtx, FormatContext
 
             convFrame->pts = aPTS * outFmtCtx->streams[OUT_AUDIO_INDEX]->time_base.den * 1024 / outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->sample_rate;;
 
-            std::cout << "PTS ConvFrm -> " << convFrame->pts << std::endl;
-
             encode(outFmtCtx, convFrame, mediaType);
 
         }
@@ -500,18 +498,12 @@ void ScreenRecorder::writeFrame(FormatContext& fmtCtx, Packet& pkt, AVMediaType 
         pkt->dts = pkt->pts = aPTS * fmtCtx->streams[OUT_AUDIO_INDEX]->time_base.den * 1024 / fmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->sample_rate;
         aPTS++;
 
-        std::cout << "PTS outPkt -> " << pkt->pts << " DTS -> " << pkt->dts << "APTS -> " << aPTS << std::endl;
-
         if(av_interleaved_write_frame(fmtCtx.get(), pkt.get()) != 0){
             //throw
         }
         av_packet_unref(pkt.get());
     }
-
-
-
 };
-
 
 void ScreenRecorder::PSRMenu(){
     unsigned short res;
