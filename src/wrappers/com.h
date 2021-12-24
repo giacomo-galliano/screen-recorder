@@ -11,6 +11,7 @@ extern "C"
 #include <inttypes.h>
 #include <libavutil/imgutils.h>
 #include <libavutil/audio_fifo.h>
+#include <libavutil/time.h>
 }
 
 #endif //SCREEN_RECORDER_COM_H

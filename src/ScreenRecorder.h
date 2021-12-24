@@ -56,7 +56,7 @@ private:
     void writeFrame(FormatContext& fmtCtx, Packet& pkt, AVMediaType mediaType);
     int prepareDecoder(FormatContext& fmtCtx, AVMediaType mediaType); //if ret<0 -> failed
     int prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFmtCtx, AVMediaType mediaType);
-    int sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx, const AVPacket* pkt);
+    int sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx, AVPacket* pkt);
     void decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, const AVMediaType& mediaType);
     void passFrame(Frame& frame, FormatContext& inCtx, FormatContext& outFmtCtx, const AVMediaType& mediaType);
     void encode(FormatContext& outFmtCtx, Frame& frame, const AVMediaType& mediaType);

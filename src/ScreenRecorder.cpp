@@ -229,9 +229,13 @@ int ScreenRecorder::prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFm
         cCtx->width = inFmtCtx.open_streams.find(in_v_index)->second.get()->width;
         cCtx->height = inFmtCtx.open_streams.find(in_v_index)->second.get()->height;
         cCtx->pix_fmt = AV_PIX_FMT_YUV420P;
-        cCtx->time_base = (AVRational){1,30};
-        cCtx->framerate = av_inv_q(cCtx->time_base);
-
+        cCtx->time_base = (AVRational){1,1000};
+        cCtx->framerate = (AVRational){60,1};//av_inv_q(cCtx->time_base);
+//        cCtx->bit_rate = 4000000;
+//        cCtx->gop_size = 10;
+//        cCtx->max_b_frames = 0;
+//        cCtx->profile = FF_PROFILE_H264_MAIN;
+//        cCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER; -> non funziona
     }else if(mediaType == AVMEDIA_TYPE_AUDIO) {
         cCtx->channels = inFmtCtx.open_streams.find(in_a_index)->second.get()->channels;
         cCtx->channel_layout = av_get_default_channel_layout(inFmtCtx.open_streams.find(in_a_index)->second.get()->channels);
@@ -273,6 +277,17 @@ void ScreenRecorder::decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, c
 //        ul.unlock();
 
         if(readFrame(inFmtCtx.get(), pkt.get()) >= 0){
+
+//            std::cout << "READFR: " << " p->" << pkt->pts << std::endl;
+
+            if(vPTS == 0){
+                vPTS = pkt->pts;
+                pkt->pts = pkt->dts = 0;
+            }else {
+                pkt->pts = pkt->dts = (pkt->pts - vPTS );
+            }
+//            std::cout << "READFR: " << " p->" << pkt->pts << std::endl;
+
             sendPacket(inFmtCtx, outFmtCtx, pkt.get());
             //mia modifica
             av_packet_unref(pkt.get());
@@ -281,7 +296,7 @@ void ScreenRecorder::decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, c
     }
 }
 
-int ScreenRecorder::sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx, const AVPacket* pkt){ //, std::function<void(Frame&)>pFrame
+int ScreenRecorder::sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx, AVPacket* pkt){ //, std::function<void(Frame&)>pFrame
     int err = AVERROR(1);
     //spostato da dentro il for
     //Frame frame = Frame();
@@ -289,6 +304,10 @@ int ScreenRecorder::sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx
         av_frame_free(&frame);
     });
     //
+//    int64_t time = av_gettime();
+    pkt->pts = av_rescale_q(pkt->pts, inFmtCtx->streams[in_v_index]->time_base, outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base);
+    pkt->dts = av_rescale_q(pkt->dts, inFmtCtx->streams[in_v_index]->time_base, outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base);
+    pkt->duration = av_rescale_q(pkt->duration, inFmtCtx->streams[in_v_index]->time_base, outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base);
 
     auto it = inFmtCtx.open_streams.find(pkt->stream_index); // it returns an iterator
     if(it != inFmtCtx.open_streams.end()){
@@ -305,6 +324,9 @@ int ScreenRecorder::sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx
             if(err<0){
                 break;
             }
+
+//            std::cout << "SENDPK: " << " pictype->" << frame->pict_type << " f->" << frame->pts << " p->" << pkt->pts << std::endl;
+
             passFrame(frame, inFmtCtx, outFmtCtx, it->second.get()->codec_type);
             //mia modifica
             av_frame_unref(frame.get());
@@ -344,18 +366,23 @@ void ScreenRecorder::passFrame(Frame& frame, FormatContext& inCtx, FormatContext
         };
 
 
-        convFrame->width = outFmtCtx.open_streams.find(0)->second.get()->width;
-        convFrame->height = outFmtCtx.open_streams.find(0)->second.get()->height;
-        convFrame->format = outFmtCtx.open_streams.find(0)->second.get()->pix_fmt;
+        convFrame->width = outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->width;
+        convFrame->height = outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->height;
+        convFrame->format = outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->pix_fmt;
 
-        //av_frame_copy_props(convFrame.get(), frame.get());
+        av_frame_copy_props(convFrame.get(), frame.get());
 
 
         sws_scale(sws_ctx, (uint8_t const *const *)frame->data, frame->linesize, 0,
                   frame->height, convFrame->data, convFrame->linesize);
 
         //mia modifica
-        convFrame->pts = ++vPTS;
+//        if(vPTS == 0){
+//            convFrame->pts = 0;
+//            vPTS = frame->pts;
+//        }else {
+//            convFrame->pts = (frame->pts - vPTS )/ 1000;
+//        }
         //
         encode(outFmtCtx, convFrame, mediaType);
         //mia modifica
@@ -432,11 +459,14 @@ void ScreenRecorder::encode(FormatContext& outFmtCtx, Frame& frame, const AVMedi
         }
         while (res >= 0){
             res = avcodec_receive_packet(outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get(), pkt.get()); // outFmtCtx.open_streams.find(0)->second.get().get()
-            pkt->stream_index = OUT_VIDEO_INDEX;
             //mia modifica
             if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) {
                 break;
             }
+            pkt->stream_index = OUT_VIDEO_INDEX;
+
+//            std::cout << "ENCODE: " << " pictype->" << frame->pict_type << " f->" << frame->pts << " p->" << pkt->pts << std::endl;
+
             //
             writeFrame(outFmtCtx, pkt, mediaType);
             //mia modifica
@@ -480,19 +510,27 @@ void ScreenRecorder::writeFrame(FormatContext& fmtCtx, Packet& pkt, AVMediaType 
 
     //mia modifica
     if(mediaType == AVMEDIA_TYPE_VIDEO){
-        AVPacket dup;
-        av_packet_ref(&dup, pkt.get());
+//        AVPacket dup;
+//        av_packet_ref(&dup, pkt.get());
+//
+//        dup.stream_index = (mediaType == AVMEDIA_TYPE_VIDEO ? 0 : 1);
+//        auto &track = fmtCtx->streams[(mediaType == AVMEDIA_TYPE_VIDEO ? 0 : 1)];
 
-        dup.stream_index = (mediaType == AVMEDIA_TYPE_VIDEO ? 0 : 1);
-        auto &track = fmtCtx->streams[(mediaType == AVMEDIA_TYPE_VIDEO ? 0 : 1)];
+//        dup.duration = track->time_base.den / fmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base.den;
+//        dup.dts = aPTS++; //dup.pts = vPTS * track->time_base.den / fmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base.den;
+//        vPTS++;
+        pkt->pts = av_rescale_q(pkt->pts, outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base, outFmtCtx->streams[OUT_VIDEO_INDEX]->time_base);
+        pkt->dts = av_rescale_q(pkt->dts,outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base, outFmtCtx->streams[OUT_VIDEO_INDEX]->time_base);
+        pkt->duration = av_rescale_q(pkt->duration, outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base, outFmtCtx->streams[OUT_VIDEO_INDEX]->time_base);
 
-        dup.duration = track->time_base.den / fmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base.den;
-        dup.dts = dup.pts = vPTS * track->time_base.den / fmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base.den;
-        //vPTS++;
-        if(av_interleaved_write_frame(fmtCtx.get(), &dup) != 0){
+//        std::cout << "WRITEF: " << " p->" << pkt->pts << std::endl;
+
+        if(av_interleaved_write_frame(fmtCtx.get(), pkt.get()) != 0){
             //throw
         }
-        av_packet_unref(&dup);
+//        pkt is now blank (av_interleaved_write_frame() takes ownership of
+//        * its contents and resets pkt), so that no unreferencing is necessary.
+//        av_packet_unref(&dup);
     }else if(mediaType == AVMEDIA_TYPE_AUDIO){
         pkt->duration = fmtCtx->streams[OUT_AUDIO_INDEX]->time_base.den * 1024 / fmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->sample_rate;
         pkt->dts = pkt->pts = aPTS * fmtCtx->streams[OUT_AUDIO_INDEX]->time_base.den * 1024 / fmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->sample_rate;
@@ -501,7 +539,7 @@ void ScreenRecorder::writeFrame(FormatContext& fmtCtx, Packet& pkt, AVMediaType 
         if(av_interleaved_write_frame(fmtCtx.get(), pkt.get()) != 0){
             //throw
         }
-        av_packet_unref(pkt.get());
+//        av_packet_unref(pkt.get());
     }
 };
 
