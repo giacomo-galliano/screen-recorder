@@ -242,7 +242,7 @@ int ScreenRecorder::prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFm
         cCtx->sample_rate = inFmtCtx.open_streams.find(in_a_index)->second.get()->sample_rate;
         cCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
         cCtx->frame_size = 1024;
-        cCtx->bit_rate = 128000;
+        cCtx->bit_rate = 48000;
         cCtx->time_base.num = 1;
         cCtx->time_base.den = cCtx->sample_rate;
     }
@@ -279,15 +279,34 @@ void ScreenRecorder::decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, c
         if(readFrame(inFmtCtx.get(), pkt.get()) >= 0){
 
 //            std::cout << "READFR: " << " p->" << pkt->pts << std::endl;
-
-            if(vPTS == 0){
-                vPTS = pkt->pts;
-                pkt->pts = pkt->dts = 0;
-            }else {
-                pkt->pts = pkt->dts = (pkt->pts - vPTS );
-            }
 //            std::cout << "READFR: " << " p->" << pkt->pts << std::endl;
-
+            if(mediaType == AVMEDIA_TYPE_VIDEO) {
+                if(vPTS == 0){
+                    vPTS = pkt->pts;
+                    pkt->pts = pkt->dts = 0;
+                }else {
+                    pkt->pts = pkt->dts = (pkt->pts - vPTS );
+                }
+                pkt->pts = av_rescale_q(pkt->pts, inFmtCtx->streams[in_v_index]->time_base,
+                                        outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base);
+                pkt->dts = av_rescale_q(pkt->dts, inFmtCtx->streams[in_v_index]->time_base,
+                                        outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base);
+                pkt->duration = av_rescale_q(pkt->duration, inFmtCtx->streams[in_v_index]->time_base,
+                                             outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base);
+            }else if (mediaType == AVMEDIA_TYPE_AUDIO){
+                if(aPTS == 0){
+                    aPTS = pkt->pts;
+                    pkt->pts = pkt->dts = 0;
+                }else {
+                    pkt->pts = pkt->dts = (pkt->pts - aPTS );
+                }
+                pkt->pts = av_rescale_q(pkt->pts, inFmtCtx->streams[in_a_index]->time_base,
+                                        outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->time_base);
+                pkt->dts = av_rescale_q(pkt->dts, inFmtCtx->streams[in_a_index]->time_base,
+                                        outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->time_base);
+                pkt->duration = av_rescale_q(pkt->duration, inFmtCtx->streams[in_a_index]->time_base,
+                                             outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->time_base);
+            }
             sendPacket(inFmtCtx, outFmtCtx, pkt.get());
             //mia modifica
             av_packet_unref(pkt.get());
@@ -305,17 +324,9 @@ int ScreenRecorder::sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx
     });
     //
 //    int64_t time = av_gettime();
-    pkt->pts = av_rescale_q(pkt->pts, inFmtCtx->streams[in_v_index]->time_base, outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base);
-    pkt->dts = av_rescale_q(pkt->dts, inFmtCtx->streams[in_v_index]->time_base, outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base);
-    pkt->duration = av_rescale_q(pkt->duration, inFmtCtx->streams[in_v_index]->time_base, outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base);
 
     auto it = inFmtCtx.open_streams.find(pkt->stream_index); // it returns an iterator
     if(it != inFmtCtx.open_streams.end()){
-        //mia modifica
-//        av_packet_rescale_ts(pkt,
-//                             inFmtCtx->streams[pkt->stream_index]->time_base,
-//                             it->second.get()->time_base);
-        //
 
         avcodec_send_packet(it->second.get(), pkt); //avcodec_send_packet(cCtx->second.get(), pkt);
 
@@ -324,9 +335,7 @@ int ScreenRecorder::sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx
             if(err<0){
                 break;
             }
-
 //            std::cout << "SENDPK: " << " pictype->" << frame->pict_type << " f->" << frame->pts << " p->" << pkt->pts << std::endl;
-
             passFrame(frame, inFmtCtx, outFmtCtx, it->second.get()->codec_type);
             //mia modifica
             av_frame_unref(frame.get());
@@ -376,14 +385,6 @@ void ScreenRecorder::passFrame(Frame& frame, FormatContext& inCtx, FormatContext
         sws_scale(sws_ctx, (uint8_t const *const *)frame->data, frame->linesize, 0,
                   frame->height, convFrame->data, convFrame->linesize);
 
-        //mia modifica
-//        if(vPTS == 0){
-//            convFrame->pts = 0;
-//            vPTS = frame->pts;
-//        }else {
-//            convFrame->pts = (frame->pts - vPTS )/ 1000;
-//        }
-        //
         encode(outFmtCtx, convFrame, mediaType);
         //mia modifica
         av_frame_unref(convFrame.get());
@@ -426,21 +427,29 @@ void ScreenRecorder::passFrame(Frame& frame, FormatContext& inCtx, FormatContext
 
         av_freep(&cSamples[0]);
 
+        int nFrames = frame->pkt_duration / outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size;
+        int i = 0;
+
         while (av_audio_fifo_size(audioFifo) >= outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size) {
+            av_frame_copy_props(convFrame.get(), frame.get());
+
             convFrame->nb_samples = outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size;
             convFrame->channels = inCtx.open_streams.find(in_a_index)->second.get()->channels;
             convFrame->channel_layout = av_get_default_channel_layout(inCtx.open_streams.find(in_a_index)->second.get()->channels);
             convFrame->format = requireAudioFmt;
             convFrame->sample_rate = outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->sample_rate;
+            convFrame->pts = frame->pts + convFrame->nb_samples * i++;
 
             res = av_frame_get_buffer(convFrame.get(), 0);
             res = av_audio_fifo_read(audioFifo, (void**)convFrame->data, outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size);
 
-            convFrame->pts = aPTS * outFmtCtx->streams[OUT_AUDIO_INDEX]->time_base.den * 1024 / outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->sample_rate;;
+
+
+//            std::cout << "pts: " << convFrame->pts << " i: " << tmp++ << " pkt duration: " << frame->pkt_duration << " samples: " << convFrame->nb_samples << " " << nFrames << std::endl;
 
             encode(outFmtCtx, convFrame, mediaType);
-
         }
+
         av_frame_unref(convFrame.get());
         av_audio_fifo_free(audioFifo);
         swr_free(&swr_ctx);
@@ -464,9 +473,7 @@ void ScreenRecorder::encode(FormatContext& outFmtCtx, Frame& frame, const AVMedi
                 break;
             }
             pkt->stream_index = OUT_VIDEO_INDEX;
-
 //            std::cout << "ENCODE: " << " pictype->" << frame->pict_type << " f->" << frame->pts << " p->" << pkt->pts << std::endl;
-
             //
             writeFrame(outFmtCtx, pkt, mediaType);
             //mia modifica
@@ -481,11 +488,14 @@ void ScreenRecorder::encode(FormatContext& outFmtCtx, Frame& frame, const AVMedi
         }
 //        while (res >= 0){
             res = avcodec_receive_packet(outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get(), pkt.get()); // outFmtCtx.open_streams.find(0)->second.get().get()
+            if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) {
+                return;
+            }
             pkt->stream_index = OUT_AUDIO_INDEX;
+
             writeFrame(outFmtCtx, pkt, mediaType);
 
             av_packet_unref(pkt.get());
-
 //        }
     }
 };
@@ -516,31 +526,29 @@ void ScreenRecorder::writeFrame(FormatContext& fmtCtx, Packet& pkt, AVMediaType 
 //        dup.stream_index = (mediaType == AVMEDIA_TYPE_VIDEO ? 0 : 1);
 //        auto &track = fmtCtx->streams[(mediaType == AVMEDIA_TYPE_VIDEO ? 0 : 1)];
 
-//        dup.duration = track->time_base.den / fmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base.den;
-//        dup.dts = aPTS++; //dup.pts = vPTS * track->time_base.den / fmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base.den;
-//        vPTS++;
         pkt->pts = av_rescale_q(pkt->pts, outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base, outFmtCtx->streams[OUT_VIDEO_INDEX]->time_base);
         pkt->dts = av_rescale_q(pkt->dts,outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base, outFmtCtx->streams[OUT_VIDEO_INDEX]->time_base);
         pkt->duration = av_rescale_q(pkt->duration, outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base, outFmtCtx->streams[OUT_VIDEO_INDEX]->time_base);
 
-//        std::cout << "WRITEF: " << " p->" << pkt->pts << std::endl;
+        std::cout << "WRITEF: " << " p->" << pkt->pts << std::endl;
 
-        if(av_interleaved_write_frame(fmtCtx.get(), pkt.get()) != 0){
-            //throw
-        }
+    }else if(mediaType == AVMEDIA_TYPE_AUDIO){
+        pkt->pts = av_rescale_q(pkt->pts, fmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->time_base, outFmtCtx->streams[OUT_AUDIO_INDEX]->time_base);
+        pkt->dts = av_rescale_q(pkt->dts,fmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->time_base, outFmtCtx->streams[OUT_AUDIO_INDEX]->time_base);
+        pkt->duration = av_rescale_q(pkt->duration, fmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->time_base, outFmtCtx->streams[OUT_AUDIO_INDEX]->time_base);
+
+        std::cout << "AUDIOWRITE: " << " p->" << pkt->pts << " d-> " << pkt->dts << std::endl;
+//        if(pkt->dts >=0)
+
+//        av_packet_unref(pkt.get());
+    }
 //        pkt is now blank (av_interleaved_write_frame() takes ownership of
 //        * its contents and resets pkt), so that no unreferencing is necessary.
 //        av_packet_unref(&dup);
-    }else if(mediaType == AVMEDIA_TYPE_AUDIO){
-        pkt->duration = fmtCtx->streams[OUT_AUDIO_INDEX]->time_base.den * 1024 / fmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->sample_rate;
-        pkt->dts = pkt->pts = aPTS * fmtCtx->streams[OUT_AUDIO_INDEX]->time_base.den * 1024 / fmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->sample_rate;
-        aPTS++;
-
-        if(av_interleaved_write_frame(fmtCtx.get(), pkt.get()) != 0){
-            //throw
-        }
-//        av_packet_unref(pkt.get());
+    if(av_interleaved_write_frame(fmtCtx.get(), pkt.get()) != 0){
+        //throw
     }
+
 };
 
 void ScreenRecorder::PSRMenu(){
