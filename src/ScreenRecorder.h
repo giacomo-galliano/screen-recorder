@@ -25,7 +25,7 @@ inline const AVSampleFormat requireAudioFmt = AV_SAMPLE_FMT_FLTP;
 class ScreenRecorder {
 public:
     int rec_type;
-    std::atomic_bool finished, recording, pause;
+    std::atomic_bool finished, recording, pause, writing;
 
     ScreenRecorder();
     void open_();
@@ -56,11 +56,12 @@ private:
     void writeFrame(FormatContext& fmtCtx, Packet& pkt, AVMediaType mediaType);
     int prepareDecoder(FormatContext& fmtCtx, AVMediaType mediaType); //if ret<0 -> failed
     int prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFmtCtx, AVMediaType mediaType);
+    void generateOutStreams(FormatContext& outFmtCtx, const CodecContext& cCtx, const AVMediaType& mediaType);
     int sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx, AVPacket* pkt);
     void decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, const AVMediaType& mediaType);
     void passFrame(Frame& frame, FormatContext& inCtx, FormatContext& outFmtCtx, const AVMediaType& mediaType);
     void encode(FormatContext& outFmtCtx, Frame& frame, const AVMediaType& mediaType);
-    void generateOutStreams(FormatContext& outFmtCtx, const CodecContext& cCtx, const AVMediaType& mediaType);
+
 
     void PSRMenu(); //pause-stop-restart menu
     void showPSROptions();

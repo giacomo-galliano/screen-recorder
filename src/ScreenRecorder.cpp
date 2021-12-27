@@ -45,7 +45,7 @@ void ScreenRecorder::start_(){
             prepareEncoder(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
             writeHeader(outFmtCtx);
             videoThread = new std::thread([this](){
-                this->recording = true;
+                this->recording.store(true);
                 std::cout << "Recording.." << std::endl;
                 this->decode(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
             });
@@ -57,7 +57,8 @@ void ScreenRecorder::start_(){
             prepareEncoder(a_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_AUDIO);
             writeHeader(outFmtCtx);
             videoThread = new std::thread([this](){
-                this->recording = true;
+                this->recording.store(true);
+                this->writing.store(false);
                 this->decode(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
             });
 //            std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -85,18 +86,18 @@ void ScreenRecorder::start_(){
 }
 
 void ScreenRecorder::pause_(){
-    this->pause = true;
+    this->pause.store(true);
     std::cout << "Recording paused.." << std::endl;
 }
 
 void ScreenRecorder::restart_(){
-    this->pause = false;
+    this->pause.store(false);
     std::cout << "Recording.." << std::endl;
 }
 
 void ScreenRecorder::stop_(){
-    this->recording = false;
-    this->finished = true;
+    this->recording.store(false);
+    this->finished.store(true);
     switch(rec_type){
         case Command::vofs:
             videoThread->join();
@@ -145,6 +146,7 @@ int ScreenRecorder::readFrame(AVFormatContext* fmtCtx, AVPacket* pkt){
 }
 
 int ScreenRecorder::writeHeader(FormatContext& fmtCtx){
+
     if (avformat_write_header(fmtCtx.get(), nullptr) < 0) {
         std::cout << "Failed to write header" << std::endl;
         return -2;
@@ -154,13 +156,13 @@ int ScreenRecorder::writeHeader(FormatContext& fmtCtx){
 
 int ScreenRecorder::writeTrailer(FormatContext& fmtCtx){
     av_write_trailer(fmtCtx.get());
-    //if (!(oft->flags & AVFMT_NOFILE)) {
-    int err = avio_close(fmtCtx->pb);
-    if (err < 0) {
-        std::cout << "Failed to close file" << std::endl;
-        return -1;
+    if (!(fmtCtx->flags & AVFMT_NOFILE)) {
+        int err = avio_close(fmtCtx->pb);
+        if (err < 0) {
+            std::cout << "Failed to close file" << std::endl;
+            return -1;
+        }
     }
-    //}
     return 0;
 };
 
@@ -229,22 +231,24 @@ int ScreenRecorder::prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFm
         cCtx->width = inFmtCtx.open_streams.find(in_v_index)->second.get()->width;
         cCtx->height = inFmtCtx.open_streams.find(in_v_index)->second.get()->height;
         cCtx->pix_fmt = AV_PIX_FMT_YUV420P;
-        cCtx->time_base = (AVRational){1,1000};
+        cCtx->time_base = (AVRational){1,6000};
         cCtx->framerate = (AVRational){60,1};//av_inv_q(cCtx->time_base);
 //        cCtx->bit_rate = 4000000;
 //        cCtx->gop_size = 10;
 //        cCtx->max_b_frames = 0;
 //        cCtx->profile = FF_PROFILE_H264_MAIN;
-//        cCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER; -> non funziona
+        if ( outFmtCtx->oformat->flags & AVFMT_GLOBALHEADER)
+            cCtx->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
     }else if(mediaType == AVMEDIA_TYPE_AUDIO) {
         cCtx->channels = inFmtCtx.open_streams.find(in_a_index)->second.get()->channels;
         cCtx->channel_layout = av_get_default_channel_layout(inFmtCtx.open_streams.find(in_a_index)->second.get()->channels);
         cCtx->sample_rate = inFmtCtx.open_streams.find(in_a_index)->second.get()->sample_rate;
         cCtx->sample_fmt = AV_SAMPLE_FMT_FLTP;
-        cCtx->frame_size = 1024;
-        cCtx->bit_rate = 48000;
+//        cCtx->frame_size = 2048;
+        cCtx->bit_rate = 128000;
         cCtx->time_base.num = 1;
         cCtx->time_base.den = cCtx->sample_rate;
+//        cCtx->strict_std_compliance = FF_COMPLIANCE_EXPERIMENTAL;
     }
 
     generateOutStreams(outFmtCtx, cCtx, mediaType);
@@ -254,6 +258,8 @@ int ScreenRecorder::prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFm
         return -1;
     }
 
+    avcodec_parameters_from_context(outFmtCtx->streams[mediaType == AVMEDIA_TYPE_VIDEO ? OUT_VIDEO_INDEX : OUT_AUDIO_INDEX]->codecpar, cCtx.get());
+
     if(mediaType == AVMEDIA_TYPE_VIDEO){
         outFmtCtx.open_streams.emplace(OUT_VIDEO_INDEX, std::move(cCtx));
     }else if(mediaType == AVMEDIA_TYPE_AUDIO) {
@@ -261,7 +267,17 @@ int ScreenRecorder::prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFm
     }
 
     return 0;
-};
+}
+
+void ScreenRecorder::generateOutStreams(FormatContext& outFmtCtx, const CodecContext& cCtx, const AVMediaType& mediaType){
+    AVStream* out_stream = avformat_new_stream(outFmtCtx.get(), nullptr);
+//    avcodec_parameters_from_context(out_stream->codecpar, cCtx.get()); --> non va bene qui, messa dopo la open
+    if(mediaType == AVMEDIA_TYPE_VIDEO){
+        out_stream->index = 0;
+    } else if(mediaType == AVMEDIA_TYPE_AUDIO){
+        out_stream->index = 1;
+    }
+}
 
 void ScreenRecorder::decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, const AVMediaType& mediaType){
 
@@ -271,7 +287,7 @@ void ScreenRecorder::decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, c
 
     while(true){
 //        cv.wait(ul, [this] (){return !pause;});
-        if(finished){
+        if(finished.load()){
             break;
         }
 //        ul.unlock();
@@ -306,6 +322,7 @@ void ScreenRecorder::decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, c
                                         outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->time_base);
                 pkt->duration = av_rescale_q(pkt->duration, inFmtCtx->streams[in_a_index]->time_base,
                                              outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->time_base);
+
             }
             sendPacket(inFmtCtx, outFmtCtx, pkt.get());
             //mia modifica
@@ -335,6 +352,12 @@ int ScreenRecorder::sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx
             if(err<0){
                 break;
             }
+
+            if (frame->pts == AV_NOPTS_VALUE) {
+                std::cout << "NO VALUE PTS" << std::endl;
+                break;
+            }
+
 //            std::cout << "SENDPK: " << " pictype->" << frame->pict_type << " f->" << frame->pts << " p->" << pkt->pts << std::endl;
             passFrame(frame, inFmtCtx, outFmtCtx, it->second.get()->codec_type);
             //mia modifica
@@ -342,7 +365,6 @@ int ScreenRecorder::sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx
             if (it->second.get()->codec_type == AVMEDIA_TYPE_AUDIO){
                 break;
             }
-            //
         }
     }
     return err == AVERROR(EAGAIN) ? 0 : err;
@@ -401,11 +423,9 @@ void ScreenRecorder::passFrame(Frame& frame, FormatContext& inCtx, FormatContext
                                      (AVSampleFormat)inCtx->streams[in_a_index]->codecpar->format,
                                      inCtx->streams[in_a_index]->codecpar->sample_rate,
                                      0, nullptr);
-
         swr_init(swr_ctx);
         audioFifo = av_audio_fifo_alloc(requireAudioFmt, inCtx.open_streams.find(in_a_index)->second.get()->channels,
                                         inCtx.open_streams.find(in_a_index)->second.get()->sample_rate*2);
-
         uint8_t **cSamples = nullptr;
         int res = av_samples_alloc_array_and_samples(&cSamples, NULL, outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->channels, frame->nb_samples, requireAudioFmt, 0);
         if (res < 0) {
@@ -419,37 +439,47 @@ void ScreenRecorder::passFrame(Frame& frame, FormatContext& inCtx, FormatContext
             std::cerr << "Audio buffer is too small." << std::endl;
             //TODO:  av_audio_fifo_realloc(audioFifo, av_audio_fifo_size(fifo) + frame->nb_samples)
         }
-
         res = av_audio_fifo_write(audioFifo, (void**)cSamples, frame->nb_samples);
         if (res < 0) {
             std::cerr << "Fail to write fifo" << std::endl;
         }
-
         av_freep(&cSamples[0]);
 
-        int nFrames = frame->pkt_duration / outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size;
+//      int nFrames = frame->pkt_duration / outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size;
         int i = 0;
 
+        av_frame_copy_props(convFrame.get(), frame.get());
+        convFrame->nb_samples = outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size;
+        convFrame->channels = inCtx.open_streams.find(in_a_index)->second.get()->channels;
+        convFrame->channel_layout = av_get_default_channel_layout(inCtx.open_streams.find(in_a_index)->second.get()->channels);
+        convFrame->format = requireAudioFmt;
+        convFrame->sample_rate = outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->sample_rate;
+        res = av_frame_get_buffer(convFrame.get(), 0);
+
         while (av_audio_fifo_size(audioFifo) >= outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size) {
-            av_frame_copy_props(convFrame.get(), frame.get());
 
-            convFrame->nb_samples = outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size;
-            convFrame->channels = inCtx.open_streams.find(in_a_index)->second.get()->channels;
-            convFrame->channel_layout = av_get_default_channel_layout(inCtx.open_streams.find(in_a_index)->second.get()->channels);
-            convFrame->format = requireAudioFmt;
-            convFrame->sample_rate = outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->sample_rate;
-            convFrame->pts = frame->pts + convFrame->nb_samples * i++;
+            convFrame->pts = frame->pts + convFrame->nb_samples * ++i;
 
-            res = av_frame_get_buffer(convFrame.get(), 0);
             res = av_audio_fifo_read(audioFifo, (void**)convFrame->data, outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size);
 
-
-
-//            std::cout << "pts: " << convFrame->pts << " i: " << tmp++ << " pkt duration: " << frame->pkt_duration << " samples: " << convFrame->nb_samples << " " << nFrames << std::endl;
-
+            std::cout << "pts: " << convFrame->pts << " i: " << i << " pkt duration: " << frame->pkt_duration << " samples: " << convFrame->nb_samples << " sample format-> " << convFrame->format << std::endl;
             encode(outFmtCtx, convFrame, mediaType);
         }
+            //choose between last part of packet or a single packet whit size < frame_size (scelgo last part --l'altro è come se fosse corrotto)
+            if(i > 0) {
+            std::cout << "fifo size -> " << av_audio_fifo_size(audioFifo) << std::endl;
 
+            convFrame->pts = frame->pts + convFrame->nb_samples * i + av_audio_fifo_size(audioFifo);
+
+            res = av_audio_fifo_read(audioFifo, (void **) convFrame->data,
+                                     outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size);
+
+            std::cout << "pts: " << convFrame->pts << " i: " << i << " pkt duration: " << frame->pkt_duration
+                      << " samples: " << convFrame->nb_samples << " sample formatt-> " << convFrame->format
+                      << std::endl;
+            if(res > 0)
+                encode(outFmtCtx, convFrame, mediaType);
+            }
         av_frame_unref(convFrame.get());
         av_audio_fifo_free(audioFifo);
         swr_free(&swr_ctx);
@@ -484,7 +514,7 @@ void ScreenRecorder::encode(FormatContext& outFmtCtx, Frame& frame, const AVMedi
 
         res = avcodec_send_frame(outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get(), frame.get());  //outFmtCtx.open_streams.find(0)->second.get().get()
         if(res < 0){
-            std::cerr << "Error sending the frame for encoding, media type " << mediaType << std::endl;
+            std::cerr << "Error sending the frame for encoding, media type " << mediaType << " frame pts " << frame->pts << std::endl;
         }
 //        while (res >= 0){
             res = avcodec_receive_packet(outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get(), pkt.get()); // outFmtCtx.open_streams.find(0)->second.get().get()
@@ -498,17 +528,7 @@ void ScreenRecorder::encode(FormatContext& outFmtCtx, Frame& frame, const AVMedi
             av_packet_unref(pkt.get());
 //        }
     }
-};
-
-void ScreenRecorder::generateOutStreams(FormatContext& outFmtCtx, const CodecContext& cCtx, const AVMediaType& mediaType){
-    AVStream* out_stream = avformat_new_stream(outFmtCtx.get(), nullptr);
-    avcodec_parameters_from_context(out_stream->codecpar, cCtx.get());
-    if(mediaType == AVMEDIA_TYPE_VIDEO){
-        out_stream->index = 0;
-    } else if(mediaType == AVMEDIA_TYPE_AUDIO){
-        out_stream->index = 1;
-    }
-};
+}
 
 void ScreenRecorder::writeFrame(FormatContext& fmtCtx, Packet& pkt, AVMediaType mediaType){
     // this is a flush packet, ignore and return.
@@ -530,24 +550,27 @@ void ScreenRecorder::writeFrame(FormatContext& fmtCtx, Packet& pkt, AVMediaType 
         pkt->dts = av_rescale_q(pkt->dts,outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base, outFmtCtx->streams[OUT_VIDEO_INDEX]->time_base);
         pkt->duration = av_rescale_q(pkt->duration, outFmtCtx.open_streams.find(OUT_VIDEO_INDEX)->second.get()->time_base, outFmtCtx->streams[OUT_VIDEO_INDEX]->time_base);
 
-        std::cout << "WRITEF: " << " p->" << pkt->pts << std::endl;
+//        std::cout << "WRITEF: " << " p->" << pkt->pts << std::endl;
 
     }else if(mediaType == AVMEDIA_TYPE_AUDIO){
         pkt->pts = av_rescale_q(pkt->pts, fmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->time_base, outFmtCtx->streams[OUT_AUDIO_INDEX]->time_base);
         pkt->dts = av_rescale_q(pkt->dts,fmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->time_base, outFmtCtx->streams[OUT_AUDIO_INDEX]->time_base);
         pkt->duration = av_rescale_q(pkt->duration, fmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->time_base, outFmtCtx->streams[OUT_AUDIO_INDEX]->time_base);
 
-        std::cout << "AUDIOWRITE: " << " p->" << pkt->pts << " d-> " << pkt->dts << std::endl;
-//        if(pkt->dts >=0)
+//        std::cout << "AUDIOWRITE: " << " p->" << pkt->pts << " d-> " << pkt->dts << " duration-> " << pkt->duration << std::endl;
 
 //        av_packet_unref(pkt.get());
     }
+
 //        pkt is now blank (av_interleaved_write_frame() takes ownership of
 //        * its contents and resets pkt), so that no unreferencing is necessary.
 //        av_packet_unref(&dup);
+    while(writing.load());
+    writing.store(true);
     if(av_interleaved_write_frame(fmtCtx.get(), pkt.get()) != 0){
         //throw
     }
+    writing.store(false);
 
 };
 
