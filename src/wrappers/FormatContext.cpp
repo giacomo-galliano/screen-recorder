@@ -18,17 +18,11 @@ FormatContext openInput(AVMediaType mediaType){
 
 #elif defined linux
     int res = -1;
-    AVDictionary * options = NULL;
-//    av_dict_set (& options, "framerate", "60", 0);
-    //av_dict_set (& options, "follow_mouse", "centered", 0);
     if(mediaType == AVMEDIA_TYPE_VIDEO) {
-        av_dict_set (& options, "video_size", "wxga", 0); //wxga==1366x768
-        //TODO: capire a che valore settare -> [4 * width * height * 2 + 1] (e se effetivamente serve)
-        inFmtCtx->probesize = 40000000;
         int offset_x = 0, offset_y = 0;
         std::string url = ":0.0+" + std::to_string(offset_x) + "," + std::to_string(offset_y);  //custom string to set the start point of the screen section
         ift = av_find_input_format("x11grab");
-        res = avformat_open_input(&inFmtCtx, url.c_str(), ift, &options);
+        res = avformat_open_input(&inFmtCtx, url.c_str(), ift, nullptr);
     }else if(mediaType == AVMEDIA_TYPE_AUDIO) {
         ift = av_find_input_format("pulse");
         res = avformat_open_input(&inFmtCtx, "default", ift, nullptr);
@@ -61,7 +55,9 @@ FormatContext openInput(AVMediaType mediaType){
     }
 
 #endif
+        //TODO: capire a che valore settare (e se effetivamente serve)
 
+    inFmtCtx->probesize = 40000000;
 
     res = avformat_find_stream_info(inFmtCtx, nullptr);
     if(res < 0){
@@ -129,7 +125,6 @@ FormatContext openOutput(const std::string& filename_out){
         avformat_free_context(outFmtCtx);
         return FormatContext();
     }
-
 
     return FormatContext(outFmtCtx, [](AVFormatContext* outCtx){
         avio_close(outCtx->pb);

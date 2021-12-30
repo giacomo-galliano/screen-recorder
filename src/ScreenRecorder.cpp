@@ -7,6 +7,13 @@ ScreenRecorder::ScreenRecorder() : recording(false), pause(false), finished(fals
 }
 
 void ScreenRecorder::open_(){
+
+    if(rec_type != Command::stop){
+        std::string out_filename;
+        getFilenameOut(out_filename);
+        outFmtCtx = openOutput(out_filename);
+    }
+
     switch(rec_type){
         case Command::vofs:
             v_inFmtCtx = openInput(AVMEDIA_TYPE_VIDEO);
@@ -30,23 +37,18 @@ void ScreenRecorder::open_(){
         default:
             std::cout << "Command not recognized" << std::endl;
     }
-    if(rec_type != Command::stop){
-        std::string out_filename;
-        getFilenameOut(out_filename);
-        outFmtCtx = openOutput(out_filename);
-    }
 
 }
 
 void ScreenRecorder::start_(){
-    switch(rec_type){
+    if(rec_type != Command::stop){
+        switch(rec_type){
         case Command::vofs:
             prepareDecoder(v_inFmtCtx, AVMEDIA_TYPE_VIDEO);
             prepareEncoder(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
             writeHeader(outFmtCtx);
             videoThread = new std::thread([this](){
                 this->recording.store(true);
-                std::cout << "Recording.." << std::endl;
                 this->decode(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
             });
             break;
@@ -65,8 +67,7 @@ void ScreenRecorder::start_(){
             audioThread = new std::thread([this](){
                 this->decode(a_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_AUDIO);
             });
-            std::cout << "Recording.." << std::endl;
-            break;
+           break;
         case Command::vosp:
             //Point p;
             //FormatSize fs;
@@ -81,18 +82,22 @@ void ScreenRecorder::start_(){
             std::cout << "Command not recognized" << std::endl;
     }
 
+        if(recording){
+            std::cout << "\033[1;32m" << "Recording.." << "\033[0m" << std::endl;
+        }
         PSRMenu();
-
+    }
 }
 
 void ScreenRecorder::pause_(){
     this->pause.store(true);
-    std::cout << "Recording paused.." << std::endl;
+    std::cout << "\033[1;33m" << "Recording.." << "\033[0m" << std::endl;
 }
 
 void ScreenRecorder::restart_(){
     this->pause.store(false);
-    std::cout << "Recording.." << std::endl;
+
+    std::cout << "\033[1;32m" << "Recording.." << "\033[0m" << std::endl;
 }
 
 void ScreenRecorder::stop_(){
@@ -146,7 +151,6 @@ int ScreenRecorder::readFrame(AVFormatContext* fmtCtx, AVPacket* pkt){
 }
 
 int ScreenRecorder::writeHeader(FormatContext& fmtCtx){
-
     if (avformat_write_header(fmtCtx.get(), nullptr) < 0) {
         std::cout << "Failed to write header" << std::endl;
         return -2;
@@ -163,6 +167,7 @@ int ScreenRecorder::writeTrailer(FormatContext& fmtCtx){
             return -1;
         }
     }
+    //}
     return 0;
 };
 
@@ -213,7 +218,7 @@ int ScreenRecorder::prepareDecoder(FormatContext& fmtCtx, AVMediaType mediaType)
 int ScreenRecorder::prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFmtCtx, AVMediaType mediaType){
     AVCodec* codec = nullptr;
     if(mediaType == AVMEDIA_TYPE_VIDEO){
-        codec = avcodec_find_encoder(AV_CODEC_ID_H264); //TODO: scegliere tra H264 e MPEG4
+        codec = avcodec_find_encoder(AV_CODEC_ID_H264);
     }else if(mediaType == AVMEDIA_TYPE_AUDIO){
         codec = avcodec_find_encoder(AV_CODEC_ID_AAC);
     }
@@ -365,6 +370,7 @@ int ScreenRecorder::sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx
             if (it->second.get()->codec_type == AVMEDIA_TYPE_AUDIO){
                 break;
             }
+            //
         }
     }
     return err == AVERROR(EAGAIN) ? 0 : err;
@@ -462,22 +468,23 @@ void ScreenRecorder::passFrame(Frame& frame, FormatContext& inCtx, FormatContext
 
             res = av_audio_fifo_read(audioFifo, (void**)convFrame->data, outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size);
 
-            std::cout << "pts: " << convFrame->pts << " i: " << i << " pkt duration: " << frame->pkt_duration << " samples: " << convFrame->nb_samples << " sample format-> " << convFrame->format << std::endl;
+            //std::cout << "pts: " << convFrame->pts << " i: " << i << " pkt duration: " << frame->pkt_duration << " samples: " << convFrame->nb_samples << " sample format-> " << convFrame->format << std::endl;
             encode(outFmtCtx, convFrame, mediaType);
         }
             //choose between last part of packet or a single packet whit size < frame_size (scelgo last part --l'altro è come se fosse corrotto)
             if(i > 0) {
-            std::cout << "fifo size -> " << av_audio_fifo_size(audioFifo) << std::endl;
+            //std::cout << "fifo size -> " << av_audio_fifo_size(audioFifo) << std::endl;
 
             convFrame->pts = frame->pts + convFrame->nb_samples * i + av_audio_fifo_size(audioFifo);
 
             res = av_audio_fifo_read(audioFifo, (void **) convFrame->data,
                                      outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get()->frame_size);
 
-            std::cout << "pts: " << convFrame->pts << " i: " << i << " pkt duration: " << frame->pkt_duration
+            /*std::cout << "pts: " << convFrame->pts << " i: " << i << " pkt duration: " << frame->pkt_duration
                       << " samples: " << convFrame->nb_samples << " sample formatt-> " << convFrame->format
                       << std::endl;
-            if(res > 0)
+            */
+             if(res > 0)
                 encode(outFmtCtx, convFrame, mediaType);
             }
         av_frame_unref(convFrame.get());
