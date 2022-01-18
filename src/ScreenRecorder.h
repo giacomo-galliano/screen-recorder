@@ -8,6 +8,7 @@
 #include <map>
 #include <thread>
 #include <mutex>
+#include <queue>
 #include <condition_variable>
 
 #include "./wrappers/com.h"
@@ -22,12 +23,18 @@
 
 inline const AVSampleFormat requireAudioFmt = AV_SAMPLE_FMT_FLTP;
 
+enum RecStatus{RECORDING, RESTARTING,  PAUSE, STOP};
+
+using namespace  std;
+
 class ScreenRecorder {
 public:
+
+
     int rec_type;
-    std::atomic_bool finished, recording, pause, writing;
 
     ScreenRecorder();
+    ~ScreenRecorder();
     void open_();
     void start_();
     void pause_();
@@ -35,32 +42,57 @@ public:
     void stop_();
 
 private:
-    long vPTS, aPTS;
-    int in_v_index, in_a_index;
-    FormatContext v_inFmtCtx, a_inFmtCtx, outFmtCtx;
+
+    //VIDEO VARIABLES
+    long vPTS;
+    int inVIndex;
+    AVDictionary * sourceOptions;
+    AVInputFormat *inVFmt;
+    AVFormatContext* inVFmtCtx;
+    AVCodec* inVC;
+    AVCodecContext* inVCCtx;
+    AVCodec* outVC;
+    AVCodecContext* outVCCtx;
+    AVStream* outVStream;
+    SwsContext* swsCtx;
+    AVFrame* convFrame;
+
+
+
+
+
+    long aPTS;
+    int inAIndex;
+    AVFormatContext *outFmtCtx;
+    AVOutputFormat* outFmt;
     AVAudioFifo* audioFifo;
-    SwsContext* sws_ctx = nullptr;
+    string outFileName;
     SwrContext* swr_ctx = nullptr;
 
-    std::mutex m;
-    std::mutex write_lock;
-    std::condition_variable cv;
+    mutex video_queue_mutex;
+    queue<AVPacket *> video_queue;
 
-    std::thread* audioThread;
-    std::thread* videoThread;
+    mutex status_lock;
+    condition_variable cv;
 
-    void init();
-    int readFrame(AVFormatContext* fmtCtx, AVPacket* pkt);
-    int writeHeader(FormatContext& fmtCtx);
-    int writeTrailer(FormatContext& fmtCtx);
-    void writeFrame(FormatContext& fmtCtx, Packet& pkt, AVMediaType mediaType);
-    int prepareDecoder(FormatContext& fmtCtx, AVMediaType mediaType); //if ret<0 -> failed
-    int prepareEncoder(FormatContext& inFmtCtx, FormatContext& outFmtCtx, AVMediaType mediaType);
-    void generateOutStreams(FormatContext& outFmtCtx, const CodecContext& cCtx, const AVMediaType& mediaType);
-    int sendPacket(FormatContext& inFmtCtx, FormatContext& outFmtCtx, AVPacket* pkt);
-    void decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, const AVMediaType& mediaType);
-    void passFrame(Frame& frame, FormatContext& inCtx, FormatContext& outFmtCtx, const AVMediaType& mediaType);
-    void encode(FormatContext& outFmtCtx, Frame& frame, const AVMediaType& mediaType);
+    mutex write_lock;
+
+
+    thread* audioThread;
+    thread* videoThread;
+    thread* readVideoThread;
+
+    RecStatus status;
+
+
+    void writeHeader();
+    void writeTrailer();
+    void openVideoInput();
+    void initVideoEncoder();
+    void readFrame();
+    void processVideo();
+    void processAudio();
+
 
 
     void PSRMenu(); //pause-stop-restart menu

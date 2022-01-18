@@ -1,13 +1,14 @@
 #include "FormatContext.h"
-
+using namespace std;
 FormatContext::FormatContext():FormatContextBase(nullptr, [](AVFormatContext*){}){};
 
 FormatContext openInput(AVMediaType mediaType){
     AVFormatContext* inFmtCtx = avformat_alloc_context();
     //inserire variabile a seconda dell'ambiente di esecuzione
     AVInputFormat* ift;
+    AVDictionary * sourceOptions = nullptr;
 
-    //inFmtCtx->probesize = 40000000;
+    if(mediaType == AVMEDIA_TYPE_VIDEO) {
 
 #ifdef _WIN32
     ift = av_find_input_format("gdigrab");
@@ -17,27 +18,28 @@ FormatContext openInput(AVMediaType mediaType){
     }
 
 #elif defined linux
-    int res = -1;
-    AVDictionary * options = NULL;
-//    av_dict_set (& options, "framerate", "60", 0);
-    //av_dict_set (& options, "follow_mouse", "centered", 0);
-    if(mediaType == AVMEDIA_TYPE_VIDEO) {
-        av_dict_set (& options, "video_size", "wxga", 0); //wxga==1366x768
+
+//        char *displayName = getenv("DISPLAY");
+//    av_dict_set (&sourceOptions, "follow_mouse", "centered", 0);
+        av_dict_set (&sourceOptions, "framerate", "60", 0);
+        av_dict_set (&sourceOptions, "video_size", "wxga", 0);//wxga==1366x768
+        av_dict_set (&sourceOptions, "probesize", "40M", 0);
         //TODO: capire a che valore settare -> [4 * width * height * 2 + 1] (e se effetivamente serve)
-        inFmtCtx->probesize = 40000000;
+//        inFmtCtx->probesize = 40000000;
         int offset_x = 0, offset_y = 0;
         std::string url = ":0.0+" + std::to_string(offset_x) + "," + std::to_string(offset_y);  //custom string to set the start point of the screen section
         ift = av_find_input_format("x11grab");
-        res = avformat_open_input(&inFmtCtx, url.c_str(), ift, &options);
+        if (ift == nullptr) {
+            throw logic_error{"av_find_input_format not found..."};
+        }
+       if( avformat_open_input(&inFmtCtx, url.c_str(), ift, &sourceOptions) != 0) {
+           throw runtime_error{"cannot open video device"};
+       }
     }else if(mediaType == AVMEDIA_TYPE_AUDIO) {
         ift = av_find_input_format("pulse");
-        res = avformat_open_input(&inFmtCtx, "default", ift, nullptr);
+        avformat_open_input(&inFmtCtx, "default", ift, nullptr);
     }
 
-    if (res != 0) {
-        std::cerr << "Error in opening input device (video)" << std::endl;
-        exit(-1);
-    }
 #else
 
     res = av_dict_set(&options, "pixel_format", "0rgb", 0);
@@ -63,10 +65,8 @@ FormatContext openInput(AVMediaType mediaType){
 #endif
 
 
-    res = avformat_find_stream_info(inFmtCtx, nullptr);
-    if(res < 0){
-        avformat_close_input(&inFmtCtx);
-        return FormatContext();
+    if(avformat_find_stream_info(inFmtCtx, &sourceOptions) < 0 ){
+        throw logic_error{"cannot find correct stream info..."};
     }
 
     return FormatContext(inFmtCtx, [](AVFormatContext* inCtx){
