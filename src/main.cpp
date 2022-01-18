@@ -8,7 +8,7 @@ int main(int argc, char **argv) {
     ScreenRecorder* sr = new ScreenRecorder();
 
         SettingsConf sc;
-        sr->rec_type = sc.optionsMenu();
+        sr->setRecType(sc.optionsMenu());
 
         sr->open_();
         sr->start_();

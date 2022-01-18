@@ -29,7 +29,6 @@ private:
 };
 
 
-
 #endif //SCREEN_RECORDER_SETTINGSCONF_H
 
 

@@ -7,8 +7,6 @@ FormatContext openInput(AVMediaType mediaType){
     //inserire variabile a seconda dell'ambiente di esecuzione
     AVInputFormat* ift;
 
-    //inFmtCtx->probesize = 40000000;
-
 #ifdef _WIN32
     ift = av_find_input_format("gdigrab");
     if (avformat_open_input(&inFmtCtx, "desktop", ift, &options) != 0) {
@@ -55,7 +53,6 @@ FormatContext openInput(AVMediaType mediaType){
     }
 
 #endif
-        //TODO: capire a che valore settare (e se effetivamente serve)
 
     inFmtCtx->probesize = 40000000;
 
@@ -78,8 +75,6 @@ FormatContext openInput(const std::string& url, const std::string& ift_short_nam
     AVFormatContext* inFmtCtx = avformat_alloc_context();
     //inserire variabile a seconda dell'ambiente di esecuzione
     AVInputFormat* ift = av_find_input_format(ift_short_name.c_str());
-
-    //inFmtCtx->probesize = 40000000;
 
     if(!ift){
         std::cout << "Unable to find input format: " << ift_short_name << std::endl;

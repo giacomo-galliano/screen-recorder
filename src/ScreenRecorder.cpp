@@ -1,7 +1,11 @@
 #include "ScreenRecorder.h"
 
-ScreenRecorder::ScreenRecorder() : recording(false), pause(false), finished(false){
+ScreenRecorder::ScreenRecorder() {
     init();
+    //recording.store(false);
+    //pause.store(false);
+    //finished.store(false);
+    state = STOP;
     vPTS = 0;
     aPTS = 0;
 }
@@ -9,7 +13,6 @@ ScreenRecorder::ScreenRecorder() : recording(false), pause(false), finished(fals
 void ScreenRecorder::open_(){
 
     if(rec_type != Command::stop){
-        std::string out_filename;
         getFilenameOut(out_filename);
         outFmtCtx = openOutput(out_filename);
     }
@@ -41,97 +44,133 @@ void ScreenRecorder::open_(){
 }
 
 void ScreenRecorder::start_(){
-    if(rec_type != Command::stop){
-        switch(rec_type){
-        case Command::vofs:
-            prepareDecoder(v_inFmtCtx, AVMEDIA_TYPE_VIDEO);
-            prepareEncoder(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
-            writeHeader(outFmtCtx);
-            videoThread = new std::thread([this](){
-                this->recording.store(true);
-                this->decode(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
-            });
-            break;
-        case Command::avfs:
-            prepareDecoder(v_inFmtCtx, AVMEDIA_TYPE_VIDEO);
-            prepareDecoder(a_inFmtCtx, AVMEDIA_TYPE_AUDIO);
-            prepareEncoder(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
-            prepareEncoder(a_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_AUDIO);
-            writeHeader(outFmtCtx);
-            videoThread = new std::thread([this](){
-                this->recording.store(true);
-                this->writing.store(false);
-                this->decode(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
-            });
+    std::unique_lock ul(status_lock);
+    if(state == STOP) {
+        switch (rec_type) {
+            case Command::vofs:
+                prepareDecoder(v_inFmtCtx, AVMEDIA_TYPE_VIDEO);
+                prepareEncoder(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
+                writeHeader(outFmtCtx);
+                videoThread = new std::thread([this]() {
+                    //this->recording.store(true);
+                    state = RECORDING;
+                    this->decode(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
+                });
+                break;
+            case Command::avfs:
+                prepareDecoder(v_inFmtCtx, AVMEDIA_TYPE_VIDEO);
+                prepareDecoder(a_inFmtCtx, AVMEDIA_TYPE_AUDIO);
+                prepareEncoder(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
+                prepareEncoder(a_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_AUDIO);
+                writeHeader(outFmtCtx);
+                videoThread = new std::thread([this]() {
+                    //this->recording.store(true);
+                    //this->writing.store(false);
+                    state = RECORDING;
+                    this->decode(v_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_VIDEO);
+                });
 //            std::this_thread::sleep_for(std::chrono::seconds(2));
-            audioThread = new std::thread([this](){
-                this->decode(a_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_AUDIO);
-            });
-           break;
-        case Command::vosp:
-            //Point p;
-            //FormatSize fs;
-            //setScreenPortion(p, fs);
-            //v_inFmtCtx = openInput();
-            break;
-        case Command::avsp:
-            //v_inFmtCtx = openInput();
-            //a_inFmtCtx = openInput();
-            break;
-        default:
-            std::cout << "Command not recognized" << std::endl;
-    }
-
-        if(recording){
-            std::cout << "\033[1;32m" << "Recording.." << "\033[0m" << std::endl;
+                audioThread = new std::thread([this]() {
+                    this->decode(a_inFmtCtx, outFmtCtx, AVMEDIA_TYPE_AUDIO);
+                });
+                break;
+            case Command::vosp:
+                //Point p;
+                //FormatSize fs;
+                //setScreenPortion(p, fs);
+                //v_inFmtCtx = openInput();
+                break;
+            case Command::avsp:
+                //v_inFmtCtx = openInput();
+                //a_inFmtCtx = openInput();
+                break;
+            case Command::stop:
+                break;
+            default:
+                std::cout << "Command not recognized" << std::endl;
         }
-        PSRMenu();
+
+    //if(recording.load()){
+    if(state == RECORDING){
+        std::cout << "\033[1;32m" << "Recording.." << "\033[0m" << std::endl;
+    }
+    ul.unlock();
+    PSRMenu();
+    }else{
+        //throw std::logic_error("Unable to start recording.");
     }
 }
 
 void ScreenRecorder::pause_(){
-    this->pause.store(true);
-    std::cout << "\033[1;33m" << "Recording.." << "\033[0m" << std::endl;
+    std::lock_guard lg(status_lock);
+    if(state == RECORDING) {
+        //this->pause.store(true);
+        state = PAUSE;
+        std::cout << "\033[1;33m" << "Recording paused" << "\033[0m" << std::endl;
+    }else{
+        //throw std::logic_error("Unable to pause recording.");
+    }
 }
 
 void ScreenRecorder::restart_(){
-    this->pause.store(false);
-
-    std::cout << "\033[1;32m" << "Recording.." << "\033[0m" << std::endl;
+    std::lock_guard lg(status_lock);
+    if(state == PAUSE) {
+        //this->pause.store(false);
+        state = RESTARTING;
+        //chiudi e riapri audio
+        //cv.notify_one();
+        std::cout << "\033[1;32m" << "Recording resumed" << "\033[0m" << std::endl;
+    }else{
+        //throw std::logic_error("Unable to pause recording.");
+    }
 }
 
 void ScreenRecorder::stop_(){
-    this->recording.store(false);
-    this->finished.store(true);
-    switch(rec_type){
-        case Command::vofs:
-            videoThread->join();
-            break;
-        case Command::avfs:
-            videoThread->join();
-            audioThread->join();
-            break;
-        case Command::vosp:
-            videoThread->join();
-            break;
-        case Command::avsp:
-            videoThread->join();
-            audioThread->join();
-            break;
-        default:
-            std::cout << "Command not recognized" << std::endl;
+    std::unique_lock ul(status_lock);
+    if(state == RECORDING || state == PAUSE){
+        //this->recording.store(false);
+        //this->finished.store(true);
+
+        state = STOP;
+        ul.unlock();
+        //cv.notify_one();
+
+
+        switch(rec_type){
+            case Command::vofs:
+                videoThread->join();
+                break;
+            case Command::avfs:
+                videoThread->join();
+                audioThread->join();
+                break;
+            case Command::vosp:
+                videoThread->join();
+                break;
+            case Command::avsp:
+                videoThread->join();
+                audioThread->join();
+                break;
+            default:
+                std::cout << "Command not recognized" << std::endl;
+        }
+
+        int err = writeTrailer(outFmtCtx);
+        if(err < 0){
+            throw std::runtime_error("A problem occurred writing the file trailer.");
+        }
+        std::cout << "\033[1;31m" << "Recording stopped" << "\033[0m" << std::endl;
+
+    }else{
+        //throw std::logic_error("Unable to stop recording. Already stopped");
     }
-
-    int err = writeTrailer(outFmtCtx);
-    if(err < 0)throw std::runtime_error("A problem occurred writing the file trailer.");
-    std::cout << "Recording stopped." << std::endl;
-
 }
 
 
 void ScreenRecorder::init(){
     avformat_network_init();
     avdevice_register_all();
+    av_log_set_level(AV_LOG_ERROR);    // print error messages only
 }
 
 int ScreenRecorder::readFrame(AVFormatContext* fmtCtx, AVPacket* pkt){
@@ -291,11 +330,16 @@ void ScreenRecorder::decode(FormatContext& inFmtCtx, FormatContext& outFmtCtx, c
 //    std::unique_lock<std::mutex> ul(m);
 
     while(true){
+        std::unique_lock ul(status_lock);
+        while(state == PAUSE){
+            cv.wait(ul);
+        }
 //        cv.wait(ul, [this] (){return !pause;});
-        if(finished.load()){
+        //if(finished.load()){
+        if(state == STOP){
             break;
         }
-//        ul.unlock();
+        ul.unlock();
 
         if(readFrame(inFmtCtx.get(), pkt.get()) >= 0){
 
@@ -471,8 +515,8 @@ void ScreenRecorder::passFrame(Frame& frame, FormatContext& inCtx, FormatContext
             //std::cout << "pts: " << convFrame->pts << " i: " << i << " pkt duration: " << frame->pkt_duration << " samples: " << convFrame->nb_samples << " sample format-> " << convFrame->format << std::endl;
             encode(outFmtCtx, convFrame, mediaType);
         }
-            //choose between last part of packet or a single packet whit size < frame_size (scelgo last part --l'altro è come se fosse corrotto)
-            if(i > 0) {
+        //choose between last part of packet or a single packet whit size < frame_size (scelgo last part --l'altro è come se fosse corrotto)
+        if(i > 0) {
             //std::cout << "fifo size -> " << av_audio_fifo_size(audioFifo) << std::endl;
 
             convFrame->pts = frame->pts + convFrame->nb_samples * i + av_audio_fifo_size(audioFifo);
@@ -484,9 +528,9 @@ void ScreenRecorder::passFrame(Frame& frame, FormatContext& inCtx, FormatContext
                       << " samples: " << convFrame->nb_samples << " sample formatt-> " << convFrame->format
                       << std::endl;
             */
-             if(res > 0)
+            if(res > 0)
                 encode(outFmtCtx, convFrame, mediaType);
-            }
+        }
         av_frame_unref(convFrame.get());
         av_audio_fifo_free(audioFifo);
         swr_free(&swr_ctx);
@@ -524,15 +568,15 @@ void ScreenRecorder::encode(FormatContext& outFmtCtx, Frame& frame, const AVMedi
             std::cerr << "Error sending the frame for encoding, media type " << mediaType << " frame pts " << frame->pts << std::endl;
         }
 //        while (res >= 0){
-            res = avcodec_receive_packet(outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get(), pkt.get()); // outFmtCtx.open_streams.find(0)->second.get().get()
-            if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) {
-                return;
-            }
-            pkt->stream_index = OUT_AUDIO_INDEX;
+        res = avcodec_receive_packet(outFmtCtx.open_streams.find(OUT_AUDIO_INDEX)->second.get(), pkt.get()); // outFmtCtx.open_streams.find(0)->second.get().get()
+        if (res == AVERROR(EAGAIN) || res == AVERROR_EOF) {
+            return;
+        }
+        pkt->stream_index = OUT_AUDIO_INDEX;
 
-            writeFrame(outFmtCtx, pkt, mediaType);
+        writeFrame(outFmtCtx, pkt, mediaType);
 
-            av_packet_unref(pkt.get());
+        av_packet_unref(pkt.get());
 //        }
     }
 }
@@ -583,17 +627,23 @@ void ScreenRecorder::writeFrame(FormatContext& fmtCtx, Packet& pkt, AVMediaType 
 
 void ScreenRecorder::PSRMenu(){
     unsigned short res;
-    while(!finished){
+    std::unique_lock ul(status_lock);
+    while(state != STOP){
+        ul.unlock();
         showPSROptions();
+        ul.lock();
         res = getPSRAnswer();
         switch(res){
             case 0:
+                ul.unlock();
                 stop_();
                 break;
             case 1:
+                ul.unlock();
                 pause_();
                 break;
             case 2:
+                ul.unlock();
                 restart_();
                 break;
             default:
@@ -603,10 +653,11 @@ void ScreenRecorder::PSRMenu(){
 };
 
 void ScreenRecorder::showPSROptions(){
-    if(pause == false) {
+    std::lock_guard lg(status_lock);
+    if(state == RECORDING) {
         std::cout << "Digit \"p\" or \"pause\" to pause the recording, \"s\" or \"stop\" to terminate\n"
                   << ">> ";
-    }else{
+    }else if(state == PAUSE){
         std::cout << "Digit \"r\" or \"restart\" to resume the recording, \"s\" or \"stop\" to terminate\n"
                   << ">> ";
     }
@@ -634,7 +685,7 @@ int ScreenRecorder::getPSRAnswer(){
     int res = -1;
 
     while(std::cin >> user_answer && (!validPSRAnswer(user_answer, res))){
-        std::cout << "Invalid answer " << user_answer << "\nTry again.." << std::endl;
+        std::cout << "\033[1;31m" << "Invalid answer: \"" << user_answer << "\". Try again.\n" << "\033[0m" << ">> ";
     }
     if(!std::cin){
         //throw std::runtime_error("Failed to read user input");
@@ -652,3 +703,8 @@ void ScreenRecorder::getFilenameOut(std::string& str){
     // std::replace(filename.begin(), filename.end(), ' ', '_');
     str = "../media/" + filename + ".mp4";
 }
+
+void ScreenRecorder::setRecType(int type){
+    rec_type = type;
+}
+

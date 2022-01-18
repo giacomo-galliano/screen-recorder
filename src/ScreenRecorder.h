@@ -25,7 +25,7 @@ inline const AVSampleFormat requireAudioFmt = AV_SAMPLE_FMT_FLTP;
 
 class ScreenRecorder {
 public:
-    int rec_type;
+    enum Status{RECORDING, RESTARTING,  PAUSE, STOP};
     std::atomic_bool finished, recording, pause, writing;
 
     ScreenRecorder();
@@ -34,16 +34,22 @@ public:
     void pause_();
     void restart_();
     void stop_();
+    void setRecType(int type);
+
 
 private:
-    long vPTS, aPTS;
-    int in_v_index, in_a_index;
     FormatContext v_inFmtCtx, a_inFmtCtx, outFmtCtx;
     AVAudioFifo* audioFifo;
     SwsContext* sws_ctx = nullptr;
     SwrContext* swr_ctx = nullptr;
 
-    std::mutex m;
+    std::string out_filename;
+
+    long vPTS, aPTS;
+    int in_v_index, in_a_index, rec_type;
+    Status state;
+
+    std::mutex status_lock;
     std::mutex write_lock;
     std::condition_variable cv;
 
