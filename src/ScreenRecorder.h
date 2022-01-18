@@ -8,7 +8,8 @@
 #include <map>
 #include <thread>
 #include <mutex>
-#include <queue>
+#include <deque>
+#include <list>
 #include <condition_variable>
 
 #include "./wrappers/com.h"
@@ -70,7 +71,7 @@ private:
     SwrContext* swr_ctx = nullptr;
 
     mutex video_queue_mutex;
-    queue<AVPacket *> video_queue;
+    deque<AVPacket *> video_queue;
 
     mutex status_lock;
     condition_variable cv;

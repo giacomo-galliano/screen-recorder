@@ -34,7 +34,6 @@ ScreenRecorder::~ScreenRecorder() {
         default:
             std::cout << "Command not recognized" << std::endl;
     }
-    cout << "tutto ok" << endl;
     writeTrailer();
     avformat_close_input(&inVFmtCtx);
     avformat_free_context(inVFmtCtx);
@@ -347,7 +346,7 @@ void ScreenRecorder::readFrame(){
         }
 
         unique_lock<mutex> video_queue_ul{video_queue_mutex};
-        video_queue.push(pkt);
+        video_queue.push_back(pkt);
         video_queue_ul.unlock();
 
     }
@@ -373,7 +372,7 @@ void ScreenRecorder::processVideo() {
                              outVCCtx->width,
                              outVCCtx->height, 1)) <0){
         throw runtime_error{"Could not fill arrays."};
-    };
+    }
 
     int res = 0;
 
@@ -382,7 +381,8 @@ void ScreenRecorder::processVideo() {
         unique_lock<mutex> video_queue_ul{video_queue_mutex};
         if(!video_queue.empty()) {
             inPkt = video_queue.front();
-            video_queue.pop();
+            video_queue.pop_front();
+//            video_queue.shrink_to_fit();
             video_queue_ul.unlock();
 
             if(inPkt->stream_index == inVIndex){
