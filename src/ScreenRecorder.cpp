@@ -11,9 +11,6 @@ ScreenRecorder::ScreenRecorder() : status(RecStatus::RECORDING){
     }
     avformat_alloc_output_context2(&outFmtCtx, outFmt, outFmt->name, outFileName.c_str());
 
-    if(avio_open2(&outFmtCtx->pb, outFileName.c_str(), AVIO_FLAG_WRITE, nullptr, nullptr) <0){
-        throw runtime_error{"Could not open out file."};
-    }
     vPTS = 0;
     aPTS = 0;
 }
@@ -22,7 +19,6 @@ ScreenRecorder::~ScreenRecorder() {
     switch(rec_type){
         case Command::vofs:
             videoThread->join();
-
             break;
         case Command::avfs:
             videoThread->join();
@@ -38,7 +34,7 @@ ScreenRecorder::~ScreenRecorder() {
         default:
             std::cout << "Command not recognized" << std::endl;
     }
-
+    cout << "tutto ok" << endl;
     writeTrailer();
     avformat_close_input(&inVFmtCtx);
     avformat_free_context(inVFmtCtx);
@@ -148,9 +144,9 @@ void ScreenRecorder::stop_(){
 
 
 void ScreenRecorder::writeHeader(){
-//    if(avio_open2(&outFmtCtx->pb, outFileName.c_str(), AVIO_FLAG_WRITE, nullptr, nullptr) <0){
-//        throw runtime_error{"Could not open out file."};
-//    }
+    if(avio_open2(&outFmtCtx->pb, outFileName.c_str(), AVIO_FLAG_WRITE, nullptr, nullptr) <0){
+        throw runtime_error{"Could not open out file."};
+    }
     if (avformat_write_header(outFmtCtx, nullptr) < 0) {
         throw runtime_error{"Could not write header."};
     }
@@ -359,37 +355,57 @@ void ScreenRecorder::readFrame(){
 
 void ScreenRecorder::processVideo() {
 
-    AVPacket *pkt;
-    av_init_packet(pkt);
+    AVPacket *inPkt;
+
+    AVPacket outPkt;
+    av_init_packet(&outPkt);
+
     AVFrame* frame;
+    frame = av_frame_alloc();
+    uint8_t *buffer = (uint8_t *) av_malloc(
+            av_image_get_buffer_size( outVCCtx->pix_fmt,outVCCtx->width,outVCCtx->height,1));
+    if (buffer == NULL) {
+        throw runtime_error{"Could not allocate image buffer."};
+    }
+    if((av_image_fill_arrays(frame->data, frame->linesize,
+                             buffer,
+                             outVCCtx->pix_fmt,
+                             outVCCtx->width,
+                             outVCCtx->height, 1)) <0){
+        throw runtime_error{"Could not fill arrays."};
+    };
+
     int res = 0;
+
     while(true){
 
         unique_lock<mutex> video_queue_ul{video_queue_mutex};
         if(!video_queue.empty()) {
-            pkt = video_queue.front();
+            inPkt = video_queue.front();
             video_queue.pop();
             video_queue_ul.unlock();
 
-            if(pkt->stream_index == inVIndex){
+            if(inPkt->stream_index == inVIndex){
 
-                pkt->pts =  vPTS++ * outFmtCtx->streams[OUT_VIDEO_INDEX]->time_base.den / outVCCtx->framerate.num;
+                inPkt->pts =  vPTS++ * outFmtCtx->streams[OUT_VIDEO_INDEX]->time_base.den / outVCCtx->framerate.num;
 
-                res = avcodec_send_packet(inVCCtx, pkt);
-                av_packet_unref(pkt);
-                av_packet_free(&pkt);
+                res = avcodec_send_packet(inVCCtx, inPkt);
+                av_packet_unref(inPkt);
+                av_packet_free(&inPkt);
                 if (res < 0) {
                     throw runtime_error("Decoding Error: sending packet");
                 }
                 if( avcodec_receive_frame(inVCCtx, frame) == 0){
+
                     av_frame_copy_props(convFrame, frame);
+
                     sws_scale(swsCtx,frame->data, frame->linesize, 0,
                               frame->height, convFrame->data, convFrame->linesize);
 
                     if(avcodec_send_frame(outVCCtx, convFrame) >= 0){
-                        if(avcodec_receive_packet(outVCCtx, pkt) >= 0){
+                        if(avcodec_receive_packet(outVCCtx, &outPkt) >= 0){
                             write_lock.lock();
-                            if (av_interleaved_write_frame(outFmtCtx, pkt) < 0) {
+                            if (av_interleaved_write_frame(outFmtCtx, &outPkt) < 0) {
                                 throw runtime_error("Error in writing file");
                             }
                             write_lock.unlock();
@@ -412,9 +428,7 @@ void ScreenRecorder::processVideo() {
         }
 
     }
-
-
-
+    av_packet_unref(&outPkt);
 }
 
 
