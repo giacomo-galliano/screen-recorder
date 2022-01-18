@@ -478,10 +478,10 @@ int ScreenRecorder::getPSRAnswer(){
     int res = -1;
 
     while(std::cin >> user_answer && (!validPSRAnswer(user_answer, res))){
-        std::cout << "Invalid answer " << user_answer << "\nTry again.." << std::endl;
+        std::cout << "\033[1;31m" << "Invalid answer: \"" << user_answer << "\". Try again.\n" << "\033[0m" << ">> ";
     }
     if(!std::cin){
-        //throw std::runtime_error("Failed to read user input");
+        throw std::runtime_error("Failed to read user input");
     }
 
     return res;

@@ -6,10 +6,10 @@
 
 #include "ScreenRecorder.h"
 /*
- * vofs = video only fullscreen
- * avfs = audio and video fullscreen
- * vosp = video only screen portion
- * avsp = audio video screen portion
+ * vofs = video only, fullscreen
+ * avfs = audio and video, fullscreen
+ * vosp = video only, screen portion
+ * avsp = audio and video, screen portion
  */
 enum Command{
     stop, vofs, vosp, avfs, avsp
