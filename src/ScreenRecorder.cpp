@@ -1,4 +1,5 @@
 #include "ScreenRecorder.h"
+#include <malloc.h>
 
 ScreenRecorder::ScreenRecorder() : status(RecStatus::RECORDING){
     avdevice_register_all();
@@ -121,21 +122,22 @@ void ScreenRecorder::start_(){
 void ScreenRecorder::pause_(){
     lock_guard<mutex> ul(status_lock);
     status = RecStatus::PAUSE;
+    malloc_trim(0);
     std::cout << "Recording paused.." << std::endl;
 }
 
 void ScreenRecorder::restart_(){
-    lock_guard<mutex> ul(status_lock);
+    lock_guard<mutex> lg(status_lock);
     status = RecStatus::RECORDING; //status = RecStatus::RESTARTING; //TODO: ---come usare restarting per risistemare i pts7cv.notify_all();
     cv.notify_all();
+
     std::cout << "Recording.." << std::endl;
 }
 
 void ScreenRecorder::stop_(){
-    unique_lock<mutex> ul(status_lock);
+    lock_guard<mutex> lg(status_lock);
     status = RecStatus::STOP;
     cv.notify_all();
-    ul.unlock();
 
     std::cout << "Recording stopped." << std::endl;
 
@@ -143,7 +145,7 @@ void ScreenRecorder::stop_(){
 
 
 void ScreenRecorder::writeHeader(){
-    if(avio_open2(&outFmtCtx->pb, outFileName.c_str(), AVIO_FLAG_WRITE, nullptr, nullptr) <0){
+    if(avio_open2(&outFmtCtx->pb, outFileName.c_str(), AVIO_FLAG_WRITE, nullptr, nullptr) < 0){
         throw runtime_error{"Could not open out file."};
     }
     if (avformat_write_header(outFmtCtx, nullptr) < 0) {
@@ -179,8 +181,8 @@ void ScreenRecorder::openVideoInput() {
 
 //        char *displayName = getenv("DISPLAY");
 //    av_dict_set (&sourceOptions, "follow_mouse", "centered", 0);
-    av_dict_set (&sourceOptions, "framerate", "60", 0);
-    av_dict_set (&sourceOptions, "video_size", "wxga", 0);//wxga==1366x768
+    av_dict_set (&sourceOptions, "framerate", "30", 0);
+//    av_dict_set (&sourceOptions, "video_size", "wxga", 0);//wxga==1366x768
     av_dict_set (&sourceOptions, "probesize", "40M", 0);
     //TODO: capire a che valore settare -> [4 * width * height * 2 + 1] (e se effetivamente serve)
 
@@ -275,7 +277,7 @@ void ScreenRecorder::initVideoEncoder(){
     outVCCtx->height = inVCCtx->height;
     outVCCtx->pix_fmt = AV_PIX_FMT_YUV420P;
     outVCCtx->time_base = (AVRational){1,60};
-    outVCCtx->framerate = (AVRational){60,1};//av_inv_q(cCtx->time_base);
+    outVCCtx->framerate = (AVRational){15,1};//av_inv_q(cCtx->time_base);
     outVCCtx->pix_fmt = AV_PIX_FMT_YUV420P;
 //    outVCCtx->bit_rate = 4000;
 //        cCtx->gop_size = 10;
@@ -295,7 +297,6 @@ void ScreenRecorder::initVideoEncoder(){
         throw runtime_error{"Video parameter from contex error"};
     }
 
-
     swsCtx = sws_getContext(
             inVCCtx->width,
             inVCCtx->height,
@@ -305,27 +306,6 @@ void ScreenRecorder::initVideoEncoder(){
             outVCCtx->pix_fmt,
             SWS_FAST_BILINEAR, nullptr, nullptr, nullptr);
 
-    convFrame = av_frame_alloc();
-    if(!convFrame){
-        throw runtime_error{"Could not allocate convFrame."};
-    }
-
-    uint8_t *buffer = (uint8_t *) av_malloc(
-            av_image_get_buffer_size( outVCCtx->pix_fmt,outVCCtx->width,outVCCtx->height,1));
-    if (buffer == NULL) {
-        throw runtime_error{"Could not allocate image buffer."};
-    }
-    if((av_image_fill_arrays(convFrame->data, convFrame->linesize,
-                             buffer,
-                             outVCCtx->pix_fmt,
-                             outVCCtx->width,
-                             outVCCtx->height, 1)) <0){
-        throw runtime_error{"Could not fill arrays."};
-    };
-
-    convFrame->width = outVCCtx->width;
-    convFrame->height = outVCCtx->height;
-    convFrame->format = outVCCtx->pix_fmt;
 
 }
 
@@ -359,14 +339,23 @@ void ScreenRecorder::processVideo() {
     AVPacket outPkt;
     av_init_packet(&outPkt);
 
-    AVFrame* frame;
-    frame = av_frame_alloc();
+    AVFrame* frame = av_frame_alloc();;
+
+    AVFrame *convFrame = av_frame_alloc();;
+//    if(!convFrame){
+//        throw runtime_error{"Could not allocate convFrame."};
+//    }
+
+//    uint8_t *buffer = new uint8_t[av_image_get_buffer_size( outVCCtx->pix_fmt,outVCCtx->width,outVCCtx->height,1)];
     uint8_t *buffer = (uint8_t *) av_malloc(
             av_image_get_buffer_size( outVCCtx->pix_fmt,outVCCtx->width,outVCCtx->height,1));
-    if (buffer == NULL) {
-        throw runtime_error{"Could not allocate image buffer."};
-    }
-    if((av_image_fill_arrays(frame->data, frame->linesize,
+//    if (buffer == NULL) {
+//        throw runtime_error{"Could not allocate image buffer."};
+//    }
+
+//  av_image_alloc(convFrame->data, convFrame->linesize, outVCCtx->width,
+//                                   outVCCtx->height, outVCCtx->pix_fmt, 1);
+    if((av_image_fill_arrays(convFrame->data, convFrame->linesize,
                              buffer,
                              outVCCtx->pix_fmt,
                              outVCCtx->width,
@@ -397,10 +386,13 @@ void ScreenRecorder::processVideo() {
                 }
                 if( avcodec_receive_frame(inVCCtx, frame) == 0){
 
+                    convFrame->width = outVCCtx->width;
+                    convFrame->height = outVCCtx->height;
+                    convFrame->format = outVCCtx->pix_fmt;
                     av_frame_copy_props(convFrame, frame);
 
-                    sws_scale(swsCtx,frame->data, frame->linesize, 0,
-                              frame->height, convFrame->data, convFrame->linesize);
+//                    sws_scale(swsCtx,frame->data, frame->linesize, 0,
+//                              frame->height, convFrame->data, convFrame->linesize);
 
                     if(avcodec_send_frame(outVCCtx, convFrame) >= 0){
                         if(avcodec_receive_packet(outVCCtx, &outPkt) >= 0){
@@ -410,25 +402,33 @@ void ScreenRecorder::processVideo() {
                             }
                             write_lock.unlock();
                         }
-
                     }
                 }else{
                     throw runtime_error("Decoding Error: receiving frame");
                 }
+                av_frame_unref(frame);
+                av_packet_unref(&outPkt);
             }
         }else{
+            video_queue.shrink_to_fit();
+            video_queue.clear();
+            malloc_trim(0);
+
             video_queue_ul.unlock();
             unique_lock<mutex> ul(status_lock);
 
             if (status == RecStatus::STOP)
                 break;
 
+
             cv.wait(ul, [this]() { return status != RecStatus::PAUSE; });
             ul.unlock();
         }
-
     }
     av_packet_unref(&outPkt);
+    av_frame_free(&frame);
+    av_frame_free(&convFrame);
+
 }
 
 
@@ -442,7 +442,6 @@ void ScreenRecorder::PSRMenu() {
         showPSROptions();
 
         ul.unlock();
-
 
         switch (getPSRAnswer()) {
             case 0:

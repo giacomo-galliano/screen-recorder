@@ -56,10 +56,6 @@ private:
     AVCodecContext* outVCCtx;
     AVStream* outVStream;
     SwsContext* swsCtx;
-    AVFrame* convFrame;
-
-
-
 
 
     long aPTS;
